@@ -5,6 +5,8 @@ import { loadProject } from "../core/ProjectLoader.js";
 import { generateDocumentation } from "../core/DocumentationEngine.js";
 import { searchRepository, displaySearchResults } from "../knowledge/searchEngine.js";
 import { askRepository, startInteractiveChat } from "../chat/chatEngine.js";
+import { executeAgentTask } from "../agent/agentEngine.js";
+import chalk from "chalk";
 
 export async function startCLI() {
     const program = new Command();
@@ -44,6 +46,19 @@ export async function startCLI() {
             } else {
                 // Interactive REPL mode
                 await startInteractiveChat(options.output);
+            }
+        });
+
+    program
+        .command("agent <taskType> [targetFile]")
+        .description("Run a repository engineering agent task (refactor, test, readme, review, impact, quality)")
+        .option("-o, --output <outputDir>", "Path to output directory containing knowledge store", "output")
+        .action(async (taskType, targetFile, options) => {
+            try {
+                await executeAgentTask(taskType, targetFile, options.output);
+            } catch (err) {
+                console.error(chalk.red(`\n  Error: ${err.message}\n`));
+                process.exit(1);
             }
         });
 
