@@ -2,6 +2,8 @@ import Groq from "groq-sdk";
 import readline from "readline";
 import chalk from "chalk";
 import "dotenv/config";
+import fs from "fs-extra";
+import path from "path";
 import { searchRepository } from "../knowledge/searchEngine.js";
 
 const GROQ_MODEL = "llama-3.1-8b-instant";
@@ -24,24 +26,115 @@ function createGroqClient() {
 }
 
 /**
- * Build a RAG context prompt from retrieved code chunks.
+ * Determine if the query is asking about high-level project architecture, circular dependencies, dead code, or metrics.
+ *
+ * @param {string} query
+ * @returns {boolean}
+ */
+function isArchitectureQuery(query) {
+    const keywords = [
+        "architecture", "structure", "circular", "dead file", "complexity", 
+        "hotspot", "metric", "statistic", "overview", "fan-in", "fan-out", 
+        "coupling", "dependency graph", "dead code"
+    ];
+    const lower = query.toLowerCase();
+    return keywords.some(kw => lower.includes(kw));
+}
+
+/**
+ * Load global project architecture summary from ARCHITECTURE.md if available.
+ *
+ * @param {string} outputDir
+ * @returns {Promise<string>}
+ */
+async function getArchitectureContext(outputDir) {
+    try {
+        const archPath = path.join(outputDir, "ARCHITECTURE.md");
+        if (await fs.pathExists(archPath)) {
+            return await fs.readFile(archPath, "utf8");
+        }
+    } catch (err) {
+        // ignore
+    }
+    return "";
+}
+
+/**
+ * Retrieve related data flow edges from dependencies.mermaid based on retrieved search results.
+ *
+ * @param {Array<{ score: number, chunk: Object }>} searchResults
+ * @param {string} outputDir
+ * @returns {Promise<string>}
+ */
+async function getDataFlowContext(searchResults, outputDir) {
+    if (!searchResults || searchResults.length === 0) return "";
+
+    try {
+        const mermaidPath = path.join(outputDir, "dependencies.mermaid");
+        if (await fs.pathExists(mermaidPath)) {
+            const mermaidContent = await fs.readFile(mermaidPath, "utf8");
+            const lines = mermaidContent.split(/\r?\n/);
+
+            // Gather cleaned path names for retrieved files
+            const cleanedPaths = [...new Set(searchResults.map(res => {
+                const fp = res.chunk.filePath;
+                return fp.replace(/[^a-zA-Z0-9]/g, "_");
+            }))];
+
+            // Extract edge lines containing any of the cleaned paths
+            const matchedEdges = [];
+            lines.forEach(line => {
+                if (line.includes("-->")) {
+                    const matches = cleanedPaths.some(cp => line.includes(cp));
+                    if (matches) {
+                        matchedEdges.push(line.trim());
+                    }
+                }
+            });
+
+            if (matchedEdges.length > 0) {
+                return matchedEdges.join("\n");
+            }
+        }
+    } catch (err) {
+        // ignore
+    }
+    return "";
+}
+
+/**
+ * Build a RAG context prompt from retrieved code chunks, global architecture context, and data flow.
  *
  * @param {string} query
  * @param {Array<{ score: number, chunk: Object }>} searchResults
+ * @param {string} [architectureContext=""]
+ * @param {string} [dataFlowContext=""]
  * @returns {string}
  */
-export function buildRAGPrompt(query, searchResults) {
+export function buildRAGPrompt(query, searchResults, architectureContext = "", dataFlowContext = "") {
     const lines = [
         `You are AutoDocs AI, the lead repository intelligence assistant.`,
-        `Your task is to answer user questions about this codebase accurately, using the retrieved code context below.`,
+        `Your task is to answer user questions about this codebase accurately, using the retrieved code context and global context below.`,
         `Rules:`,
-        `1. Rely primarily on the provided Code Context chunks.`,
+        `1. Rely primarily on the provided Code Context, Global Architecture, and Data Flow details.`,
         `2. Always reference file paths and line ranges (e.g. \`src/core/DependencyGraph.js:L4-L54\`) when explaining code.`,
         `3. Provide clear, concise, professional code explanations and refactoring suggestions when asked.`,
-        ``,
-        `--- RETRIEVED CODE CONTEXT ---`
+        ``
     ];
 
+    if (architectureContext) {
+        lines.push(`--- GLOBAL ARCHITECTURE & METRICS ---`);
+        lines.push(architectureContext);
+        lines.push(`--- END GLOBAL ARCHITECTURE ---`, ``);
+    }
+
+    if (dataFlowContext) {
+        lines.push(`--- RELATED DATA FLOW & DEPENDENCIES ---`);
+        lines.push(dataFlowContext);
+        lines.push(`--- END RELATED DATA FLOW ---`, ``);
+    }
+
+    lines.push(`--- RETRIEVED CODE CONTEXT ---`);
     if (!searchResults || searchResults.length === 0) {
         lines.push(`(No specific code chunks were retrieved for this query.)`);
     } else {
@@ -53,8 +146,8 @@ export function buildRAGPrompt(query, searchResults) {
             lines.push(`---`);
         });
     }
-
     lines.push(`--- END RETRIEVED CONTEXT ---`);
+
     lines.push(`\nUser Question: ${query}`);
 
     return lines.join("\n");
@@ -74,12 +167,25 @@ export async function askRepository(query, outputDir = "output") {
     const searchResults = await searchRepository(query, outputDir, 5);
 
     if (searchResults.length > 0) {
-        console.log(chalk.dim(`  Found ${searchResults.length} relevant code chunks in knowledge store.\n`));
+        console.log(chalk.dim(`  Found ${searchResults.length} relevant code chunks in knowledge store.`));
     } else {
-        console.log(chalk.yellow(`  No direct vector matches found. Proceeding with general model knowledge...\n`));
+        console.log(chalk.yellow(`  No direct vector matches found. Proceeding with general model knowledge.`));
     }
 
-    const prompt = buildRAGPrompt(query, searchResults);
+    let archContext = "";
+    if (isArchitectureQuery(query)) {
+        console.log(chalk.dim(`  Query matches architecture patterns. Appending ARCHITECTURE.md report context...`));
+        archContext = await getArchitectureContext(outputDir);
+    }
+
+    const flowContext = await getDataFlowContext(searchResults, outputDir);
+    if (flowContext) {
+        console.log(chalk.dim(`  Extracted matching dependency flows from dependencies.mermaid.\n`));
+    } else {
+        console.log();
+    }
+
+    const prompt = buildRAGPrompt(query, searchResults, archContext, flowContext);
 
     console.log(chalk.cyan("🤖 AutoDocs AI is thinking...\n"));
 
@@ -91,7 +197,7 @@ export async function askRepository(query, outputDir = "output") {
     });
 
     const answer = completion.choices[0]?.message?.content?.trim() || "No response generated.";
-    
+
     console.log(chalk.green("--- Repository Assistant Response ---"));
     console.log(answer);
     console.log(chalk.green("------------------------------------\n"));
@@ -147,7 +253,13 @@ export async function startInteractiveChat(outputDir = "output") {
             console.log(chalk.dim(`\n  Searching knowledge store...`));
             const searchResults = await searchRepository(input, outputDir, 4);
 
-            const ragPrompt = buildRAGPrompt(input, searchResults);
+            let archContext = "";
+            if (isArchitectureQuery(input)) {
+                archContext = await getArchitectureContext(outputDir);
+            }
+            const flowContext = await getDataFlowContext(searchResults, outputDir);
+
+            const ragPrompt = buildRAGPrompt(input, searchResults, archContext, flowContext);
 
             conversationHistory.push({ role: "user", content: ragPrompt });
 
@@ -160,7 +272,7 @@ export async function startInteractiveChat(outputDir = "output") {
             });
 
             const reply = completion.choices[0]?.message?.content?.trim() || "No response generated.";
-            
+
             // Keep history manageable (system prompt + last 6 messages)
             conversationHistory.push({ role: "assistant", content: reply });
             if (conversationHistory.length > 7) {
