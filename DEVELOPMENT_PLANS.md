@@ -83,7 +83,7 @@ graph TD
 - Local vector store serializer/deserializer (`vector_store.json`).
 - Semantic vector similarity search.
 
-### Phase 4: Repository Chat (Current Milestone)
+### Phase 4: Repository Chat (Completed)
 - Build an AI assistant capable of:
   - Explaining architecture
   - Finding implementations
@@ -93,7 +93,7 @@ graph TD
   - Answering repository questions
 - Retrieve context from `ProjectModel` and the pre-computed Knowledge Layer (index, vector store, architecture reports, dependency graphs) instead of reading raw repository files in real-time.
 
-### Phase 5: Repository Engineering Agent (Next Milestone)
+### Phase 5: Repository Engineering Agent (Completed)
 - Support:
   - Refactoring suggestions
   - Migration planning
