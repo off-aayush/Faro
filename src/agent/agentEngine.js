@@ -1,27 +1,7 @@
-import Groq from "groq-sdk";
 import chalk from "chalk";
-import "dotenv/config";
 import fs from "fs-extra";
 import path from "path";
-
-const GROQ_MODEL = "llama-3.1-8b-instant";
-
-/**
- * Initialize Groq API client from environment variables.
- *
- * @returns {Groq}
- */
-function createGroqClient() {
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey || apiKey.trim() === "") {
-        throw new Error(
-            "GROQ_API_KEY is not set in environment or .env file.\n" +
-            "  1. Get a free key at https://console.groq.com/keys\n" +
-            "  2. Add it to your .env file: GROQ_API_KEY=gsk_your_key_here"
-        );
-    }
-    return new Groq({ apiKey });
-}
+import { createGroqClient, GROQ_MODEL } from "../core/groqClient.js";
 
 async function getArchitectureContext(outputDir) {
     try {
