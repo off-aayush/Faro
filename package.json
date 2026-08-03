@@ -1,11 +1,11 @@
 {
-  "name": "auto-docs",
+  "name": "faro",
   "version": "1.0.0",
   "description": "Automated technical documentation generator for JavaScript projects",
   "type": "module",
   "main": "src/index.js",
   "bin": {
-    "autodocs": "./src/cli/index.js"
+    "Faro": "./src/cli/index.js"
   },
   "scripts": {
     "start": "node src/index.js",
@@ -14,7 +14,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/off-aayush/auto-docs.git"
+    "url": "git+https://github.com/off-aayush/faro.git"
   },
   "keywords": [
     "documentation",
@@ -26,9 +26,9 @@
   "author": "Aayush Chourasia",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/off-aayush/auto-docs/issues"
+    "url": "https://github.com/off-aayush/faro/issues"
   },
-  "homepage": "https://github.com/off-aayush/auto-docs#readme",
+  "homepage": "https://github.com/off-aayush/faro#readme",
   "engines": {
     "node": ">=20"
   },

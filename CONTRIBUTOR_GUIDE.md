@@ -1,10 +1,10 @@
-# Auto-Docs Contributor Guide
+# faro Contributor Guide
 
-Welcome to the **auto-docs** project! This guide is designed to give you a complete overview of the project's architecture, current state, and how you can help take it further.
+Welcome to the **faro** project! This guide is designed to give you a complete overview of the project's architecture, current state, and how you can help take it further.
 
-## What is auto-docs?
+## What is faro?
 
-`auto-docs` is an automated technical documentation generator for JavaScript projects. Instead of relying on manual documentation or simple regex parsing, it uses **Abstract Syntax Trees (AST)** via Babel to deeply understand the codebase. It extracts metadata about functions, classes, exports, imports, and API routes, and then automatically generates Markdown documentation and Mermaid.js diagrams.
+`faro` is an automated technical documentation generator for JavaScript projects. Instead of relying on manual documentation or simple regex parsing, it uses **Abstract Syntax Trees (AST)** via Babel to deeply understand the codebase. It extracts metadata about functions, classes, exports, imports, and API routes, and then automatically generates Markdown documentation and Mermaid.js diagrams.
 
 ## Architecture Overview
 
@@ -42,7 +42,7 @@ The project is structured into distinct, modular pipelines:
 
 ## Roadmap & How to Contribute
 
-Here are the most impactful ways to take `auto-docs` to the next level:
+Here are the most impactful ways to take `faro` to the next level:
 
 - **AI Documentation Integration**: We have a scaffold in `src/core/DocumentationEngine.js`. We want to integrate an LLM (like Gemini or OpenAI API) to automatically generate human-readable summaries and explanations alongside the AST metadata.
 - **TypeScript Support**: Update the `@babel/parser` configuration in `src/parser/parser.js` to parse `.ts` and `.tsx` files, and extract type annotations.

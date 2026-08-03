@@ -1,10 +1,10 @@
-# AutoDocs Development Plans
+# Faro Development Plans
 
 ## Project Vision
 
-AutoDocs is NOT just a Markdown documentation generator.
+Faro is NOT just a Markdown documentation generator.
 
-AutoDocs is a Repository Intelligence Platform.
+Faro is a Repository Intelligence Platform.
 
 Its purpose is to understand an entire codebase through static analysis, build an internal knowledge model, generate documentation, visualize architecture, compute repository metrics, and power an AI assistant capable of answering questions about the repository.
 

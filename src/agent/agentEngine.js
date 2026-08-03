@@ -58,10 +58,10 @@ export async function executeAgentTask(taskType, targetFile = null, outputDir = 
     const depContext = await getDependencyGraphContext(outputDir);
     const fileContext = await getTargetFileContext(targetFile);
 
-    let systemPrompt = `You are the AutoDocs Engineering Agent, an expert AI software architect.
+    let systemPrompt = `You are the Faro Engineering Agent, an expert AI software architect.
 Your goal is to provide deep, actionable insights and generate high-quality code or reports.
 Use the provided repository architecture context or file context to inform your responses.`;
-    
+
     let userPrompt = "";
 
     switch (taskType) {
