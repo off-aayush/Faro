@@ -1,17 +1,17 @@
-# AutoDocs: Repository Intelligence Platform
+# Faro: Repository Intelligence Platform
 
-AutoDocs is a powerful, AI-driven Repository Intelligence Platform. It goes beyond simple documentation generation by parsing your entire codebase, generating an internal knowledge model, and powering an interactive AI assistant and Engineering Agent capable of reasoning about your project's architecture.
+Faro is a powerful, AI-driven Repository Intelligence Platform. It goes beyond simple documentation generation by parsing your entire codebase, generating an internal knowledge model, and powering an interactive AI assistant and Engineering Agent capable of reasoning about your project's architecture.
 
-This guide provides step-by-step instructions on how to run and utilize all features of the AutoDocs project.
+This guide provides step-by-step instructions on how to run and utilize all features of the Faro project.
 
 ---
 
 ## Prerequisites
 
-AutoDocs leverages **Groq** for high-speed, accurate AI inference using the `llama-3.1-8b-instant` model.
+Faro leverages **Groq** for high-speed, accurate AI inference using the `llama-3.1-8b-instant` model.
 
 1. Get a free API key at [Groq Console](https://console.groq.com/keys)
-2. Create a `.env` file in the root of the AutoDocs repository and add your key:
+2. Create a `.env` file in the root of the Faro repository and add your key:
    ```env
    GROQ_API_KEY=gsk_your_key_here
    ```
@@ -24,11 +24,11 @@ AutoDocs leverages **Groq** for high-speed, accurate AI inference using the `lla
 
 ## Step-by-Step Usage Guide
 
-AutoDocs provides a robust CLI with various subcommands. You can run the CLI directly using node:
+Faro provides a robust CLI with various subcommands. You can run the CLI directly using node:
 ```bash
 node src/index.js <command>
 ```
-*(Alternatively, you can link the project via `npm link` to run `autodocs <command>` globally).*
+*(Alternatively, you can link the project via `npm link` to run `Faro <command>` globally).*
 
 ### Step 1: Generate the Knowledge Layer
 Before you can chat with the AI or run engineering tasks, you must parse the repository and generate the knowledge store (AST analysis, metrics, vector embeddings, etc.).
@@ -37,7 +37,7 @@ Before you can chat with the AI or run engineering tasks, you must parse the rep
 ```bash
 node src/index.js generate <path-to-your-project>
 ```
-**Example (run against AutoDocs itself):**
+**Example (run against Faro itself):**
 ```bash
 node src/index.js generate ./
 ```
@@ -89,8 +89,8 @@ node src/index.js chat
 ```
 Once in the REPL, simply type your questions:
 ```
-AutoDocs > Where is the metrics calculation implemented?
-AutoDocs > Which files are importing the chatEngine?
+Faro > Where is the metrics calculation implemented?
+Faro > Which files are importing the chatEngine?
 ```
 *(Type `exit`, `quit`, or `q` to leave).*
 
@@ -135,7 +135,7 @@ node src/index.js agent <taskType> [targetFile]
 ---
 
 ## Technical Overview
-AutoDocs is fully ES Module compatible and designed using a modular architecture:
+Faro is fully ES Module compatible and designed using a modular architecture:
 *   **Analyzers** (`src/analyzers`): Pure AST parsers that analyze your code statically.
 *   **Knowledge** (`src/knowledge`): The embedding generation, semantic indexer, and search engine.
 *   **Generators** (`src/generators`): Outputs Mermaid charts, Architecture reports, and standard Markdown.

@@ -12,7 +12,7 @@ export async function startCLI() {
     const program = new Command();
 
     program
-        .name("autodocs")
+        .name("faro")
         .description("Repository Intelligence Platform & Technical Documentation Generator")
         .version("1.0.0");
 
@@ -37,7 +37,7 @@ export async function startCLI() {
 
     program
         .command("chat [query]")
-        .description("Ask the AutoDocs AI assistant about your codebase. Omit query for interactive REPL mode.")
+        .description("Ask the Faro AI assistant about your codebase. Omit query for interactive REPL mode.")
         .option("-o, --output <outputDir>", "Path to output directory containing vector_store.json", "output")
         .action(async (query, options) => {
             if (query) {

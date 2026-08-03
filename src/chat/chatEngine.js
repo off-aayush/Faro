@@ -113,7 +113,7 @@ async function getDataFlowContext(searchResults, outputDir) {
  */
 export function buildRAGPrompt(query, searchResults, architectureContext = "", dataFlowContext = "") {
     const lines = [
-        `You are AutoDocs AI, the lead repository intelligence assistant.`,
+        `You are Faro AI, the lead repository intelligence assistant.`,
         `Your task is to answer user questions about this codebase accurately, using the retrieved code context and global context below.`,
         `Rules:`,
         `1. Rely primarily on the provided Code Context, Global Architecture, and Data Flow details.`,
@@ -187,7 +187,7 @@ export async function askRepository(query, outputDir = "output") {
 
     const prompt = buildRAGPrompt(query, searchResults, archContext, flowContext);
 
-    console.log(chalk.cyan("🤖 AutoDocs AI is thinking...\n"));
+    console.log(chalk.cyan("🤖 Faro AI is thinking...\n"));
 
     const completion = await groq.chat.completions.create({
         model: GROQ_MODEL,
@@ -215,7 +215,7 @@ export async function startInteractiveChat(outputDir = "output") {
     const groq = createGroqClient();
 
     console.log(chalk.bold.cyan("\n======================================================="));
-    console.log(chalk.bold.cyan(" 🤖 Welcome to AutoDocs Repository Intelligence Chat"));
+    console.log(chalk.bold.cyan(" 🤖 Welcome to Faro Repository Intelligence Chat"));
     console.log(chalk.dim(" Type your questions about architecture, functions, files, or flow."));
     console.log(chalk.dim(" Type 'exit', 'quit', or 'q' to end the session."));
     console.log(chalk.bold.cyan("=======================================================\n"));
@@ -223,13 +223,13 @@ export async function startInteractiveChat(outputDir = "output") {
     const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout,
-        prompt: chalk.bold.green("AutoDocs > ")
+        prompt: chalk.bold.green("Faro > ")
     });
 
     const conversationHistory = [
         {
             role: "system",
-            content: "You are AutoDocs AI, an expert software architect and assistant for this repository. Answer accurately using retrieved code context and reference file locations."
+            content: "You are Faro AI, an expert software architect and assistant for this repository. Answer accurately using retrieved code context and reference file locations."
         }
     ];
 

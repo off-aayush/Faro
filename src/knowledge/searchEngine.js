@@ -41,7 +41,7 @@ export async function searchRepository(query, outputDir = "output", topK = 5) {
 
     if (!loaded) {
         console.error(chalk.red(`\nVector store not found in '${outputDir}/vector_store.json'.`));
-        console.log(chalk.yellow("  Run 'npx autodocs <projectPath>' first to build the knowledge layer index.\n"));
+        console.log(chalk.yellow("  Run 'npx faro <projectPath>' first to build the knowledge layer index.\n"));
         return [];
     }
 
