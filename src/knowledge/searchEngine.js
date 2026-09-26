@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import ora from "ora";
 import { buildRepositoryIndex } from "./indexer.js";
 import { generateEmbedding } from "./embeddingGenerator.js";
 import { VectorStore } from "./vectorStore.js";
@@ -14,14 +15,30 @@ export async function buildAndSaveVectorStore(projectModel, outputDir) {
     console.log(chalk.blue("Building vector store & generating embeddings..."));
 
     const chunks = buildRepositoryIndex(projectModel);
-    const store = new VectorStore();
+    const store = new VectorStore(projectModel.projectName);
 
-    for (const chunk of chunks) {
-        // Embed chunk content + metadata for max semantic richness
-        const textToEmbed = `${chunk.filePath} ${chunk.name} ${chunk.content}`;
-        const vector = generateEmbedding(textToEmbed);
-        store.add(chunk, vector);
+    const spinner = ora("Embedding chunks").start();
+    let embeddedCount = 0;
+
+    const batchSize = 20;
+    for (let i = 0; i < chunks.length; i += batchSize) {
+        const batch = chunks.slice(i, i + batchSize);
+        
+        await Promise.all(batch.map(async (chunk) => {
+            const textToEmbed = `${chunk.filePath} ${chunk.name} ${chunk.content}`;
+            const vector = await generateEmbedding(textToEmbed);
+            await store.add(chunk, vector);
+            
+            embeddedCount++;
+            spinner.text = `Embedding chunk ${embeddedCount}/${chunks.length}`;
+        }));
+
+        if (i + batchSize < chunks.length) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
     }
+
+    spinner.succeed(`Embedded ${chunks.length} chunks successfully.`);
 
     await store.save(outputDir);
     return store;
@@ -31,7 +48,7 @@ export async function buildAndSaveVectorStore(projectModel, outputDir) {
  * Perform semantic search against the pre-built vector store in outputDir.
  *
  * @param {string} query - Natural language or code search term
- * @param {string} outputDir - Directory containing vector_store.json
+ * @param {string} outputDir - Directory containing qdrant_meta.json
  * @param {number} topK - Maximum number of results to return
  * @returns {Promise<Array<{ score: number, chunk: Object }>>}
  */
@@ -40,13 +57,13 @@ export async function searchRepository(query, outputDir = "output", topK = 5) {
     const loaded = await store.load(outputDir);
 
     if (!loaded) {
-        console.error(chalk.red(`\nVector store not found in '${outputDir}/vector_store.json'.`));
+        console.error(chalk.red(`\nVector store not found or Qdrant collection missing.`));
         console.log(chalk.yellow("  Run 'npx faro <projectPath>' first to build the knowledge layer index.\n"));
         return [];
     }
 
-    const queryVector = generateEmbedding(query);
-    const results = store.search(queryVector, topK);
+    const queryVector = await generateEmbedding(query);
+    const results = await store.search(queryVector, topK);
 
     return results;
 }
