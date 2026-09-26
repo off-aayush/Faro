@@ -207,8 +207,8 @@ npx faro agent <taskType> [targetFile] [-o outputDir]
 | Dependency graph | graphlib | ^2.1.8 | directed graph |
 | File scanning | glob | ^13.0.6 | |
 | Mermaid output | Raw string generation | — | No mermaid package needed |
-| Embeddings | **⚠ Custom FNV-1a hash** | — | 128-dim, NOT neural ML embeddings |
-| Vector store | **⚠ JSON file** | — | `output/vector_store.json`, brute-force scan |
+| Embeddings | voyageai | ^1.0.0 | voyage-code-3, 1024-dim |
+| Vector store | @qdrant/js-client-rest | ^1.12.0 | Qdrant vector database |
 | LLM | groq-sdk | ^1.3.0 | model: llama-3.1-8b-instant |
 | Terminal UI | chalk, ora | ^5.6.2, ^9.4.1 | |
 | Env vars | dotenv | ^17.4.2 | |
@@ -218,15 +218,17 @@ npx faro agent <taskType> [targetFile] [-o outputDir]
 ### Environment Variables
 ```
 GROQ_API_KEY=gsk_...   # Required for chat, agent, and --ai flag
+VOYAGE_API_KEY=...     # Required for Voyage AI embeddings
+QDRANT_URL=http://...  # Qdrant vector DB url
 ```
 
 ---
 
 ## 7. Known Limitations (as of Phase 0 / baseline)
 
-1. **Embeddings are not semantic.** `embeddingGenerator.js` uses FNV-1a hash bags — a 128-dimensional TF-IDF approximation. Searching for "authentication logic" will not return results semantically related to "login handler" unless they share tokens. This is the most critical limitation.
+1. ~~**Embeddings are not semantic.** `embeddingGenerator.js` uses FNV-1a hash bags — a 128-dimensional TF-IDF approximation. Searching for "authentication logic" will not return results semantically related to "login handler" unless they share tokens. This is the most critical limitation.~~ *(Resolved in Phase 1)*
 
-2. **Vector store is a flat JSON file.** `vector_store.json` is loaded entirely into memory on every search. No indexing, no filtering, no persistence between Faro instances. Does not scale.
+2. ~~**Vector store is a flat JSON file.** `vector_store.json` is loaded entirely into memory on every search. No indexing, no filtering, no persistence between Faro instances. Does not scale.~~ *(Resolved in Phase 1)*
 
 3. **No LangChain/LangGraph.** The RAG pipeline and agent are hand-rolled. They work but are not composable, not evaluatable with standard tooling, and cannot be swapped out without rewriting them.
 
@@ -256,7 +258,7 @@ GROQ_API_KEY=gsk_...   # Required for chat, agent, and --ai flag
 | Phase | Name | Status |
 |---|---|---|
 | 0 | Baseline (CLI, AST, Analyzers, ProjectModel, Mermaid, RAG, Agent) | ✅ Complete |
-| 1 | Real Embeddings + Qdrant Vector DB | ⬜ Not started |
+| 1 | Real Embeddings + Qdrant Vector DB | ✅ Complete |
 | 2 | LangChain RAG Pipeline | ⬜ Not started |
 | 3 | LangGraph Agentic Workflow | ⬜ Not started |
 | 4 | MCP Server | ⬜ Not started |
@@ -269,4 +271,5 @@ GROQ_API_KEY=gsk_...   # Required for chat, agent, and --ai flag
 | Date | Phase completed | Summary of changes |
 |---|---|---|
 | Baseline | Phase 0 | Full CLI, AST pipeline, RAG with hash embeddings and JSON vector store, Groq chat and agent |
+| 2026-09-26 | Phase 1 | Replaced hash embeddings with Voyage AI (voyage-code-3) and moved to Qdrant vector DB via Docker. |
 

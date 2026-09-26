@@ -19,6 +19,10 @@ Faro leverages **Groq** for high-speed, accurate AI inference using the `llama-3
    ```bash
    npm install
    ```
+4. Start the Qdrant vector database via Docker:
+   ```bash
+   docker compose up -d
+   ```
 
 ---
 
