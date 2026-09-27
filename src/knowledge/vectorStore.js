@@ -24,21 +24,21 @@ export class VectorStore {
      * Ensure the Qdrant collection exists.
      */
     async ensureCollection() {
-        if (this._collectionEnsured) return;
         try {
-            const result = await this.client.collectionExists(this.collectionName);
-            if (!result.exists) {
+            await this.client.getCollection(this.collectionName);
+            // Collection already exists, nothing to do
+        } catch (err) {
+            // Only create if it genuinely doesn't exist (404)
+            if (err?.status === 404 || err?.data?.status?.error?.includes('Not found')) {
                 await this.client.createCollection(this.collectionName, {
                     vectors: {
-                        size: this.vectorSize,
-                        distance: "Cosine"
-                    }
+                        size: VECTOR_DIMENSION,
+                        distance: 'Cosine',
+                    },
                 });
+            } else {
+                throw err; // Re-throw anything unexpected
             }
-            this._collectionEnsured = true;
-        } catch (error) {
-            console.error(`Failed to ensure Qdrant collection: ${error.message}`);
-            throw error;
         }
     }
 
@@ -100,7 +100,7 @@ export class VectorStore {
     async save(outputDir) {
         const storePath = path.join(outputDir, "qdrant_meta.json");
         await fs.ensureDir(outputDir);
-        
+
         let totalPoints = 0;
         try {
             const info = await this.client.getCollection(this.collectionName);
@@ -108,7 +108,7 @@ export class VectorStore {
         } catch (error) {
             // Collection might not exist yet
         }
-        
+
         await fs.writeJson(storePath, {
             collectionName: this.collectionName,
             totalPoints,
@@ -132,7 +132,7 @@ export class VectorStore {
         if (data.collectionName) {
             this.collectionName = data.collectionName;
         }
-        
+
         try {
             const result = await this.client.collectionExists(this.collectionName);
             return result.exists;
