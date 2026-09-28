@@ -87,14 +87,18 @@ export class VectorStore {
      */
     async search(queryVector, topK = 5, minScore = 0.01, filter = null) {
         try {
-            const results = await this.client.search(this.collectionName, {
-                vector: queryVector,
+            const params = {
+                query: queryVector,   // was "vector:", now "query:"
                 limit: topK,
                 score_threshold: minScore,
-                filter
-            });
+                with_payload: true,
+            };
+            if (filter) params.filter = filter;
 
-            return results.map(res => ({
+            const response = await this.client.query(this.collectionName, params);
+
+            // query() returns { points: [...] }, not a bare array
+            return response.points.map(res => ({
                 score: Math.round(res.score * 10000) / 10000,
                 chunk: res.payload.chunk
             }));
