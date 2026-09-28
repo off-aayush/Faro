@@ -207,7 +207,7 @@ npx faro agent <taskType> [targetFile] [-o outputDir]
 | Dependency graph | graphlib | ^2.1.8 | directed graph |
 | File scanning | glob | ^13.0.6 | |
 | Mermaid output | Raw string generation | — | No mermaid package needed |
-| Embeddings | voyageai | ^1.0.0 | voyage-code-3, 1024-dim |
+| Embeddings | native fetch | — | gemini-embedding-001, 768-dim |
 | Vector store | @qdrant/js-client-rest | ^1.12.0 | Qdrant vector database |
 | LLM | groq-sdk | ^1.3.0 | model: llama-3.1-8b-instant |
 | Terminal UI | chalk, ora | ^5.6.2, ^9.4.1 | |
@@ -218,7 +218,7 @@ npx faro agent <taskType> [targetFile] [-o outputDir]
 ### Environment Variables
 ```
 GROQ_API_KEY=gsk_...   # Required for chat, agent, and --ai flag
-VOYAGE_API_KEY=...     # Required for Voyage AI embeddings
+GOOGLE_API_KEY=...     # Required for Gemini Embeddings
 QDRANT_URL=http://...  # Qdrant vector DB url
 ```
 
@@ -271,5 +271,5 @@ QDRANT_URL=http://...  # Qdrant vector DB url
 | Date | Phase completed | Summary of changes |
 |---|---|---|
 | Baseline | Phase 0 | Full CLI, AST pipeline, RAG with hash embeddings and JSON vector store, Groq chat and agent |
-| 2026-09-26 | Phase 1 | Replaced hash embeddings with Voyage AI (voyage-code-3) and moved to Qdrant vector DB via Docker. |
+| 2026-09-26 | Phase 1 | Replaced hash embeddings with Gemini Embeddings (gemini-embedding-001, 768-dim) and moved to Qdrant vector DB via Docker. |
 
