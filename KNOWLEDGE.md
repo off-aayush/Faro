@@ -24,7 +24,7 @@ Faro/
 │   │   ├── DependencyGraph.js    # Builds a directed graphlib graph from imports
 │   │   ├── DocumentationEngine.js # Orchestrates the full generation pipeline
 │   │   ├── ProjectLoader.js      # Scans → parses → analyzes → builds ProjectModel
-│   │   └── groqClient.js         # Shared Groq SDK factory (model: llama-3.1-8b-instant)
+│   │   └── groqClient.js         # Shared Groq SDK factory (model: openai/gpt-oss-20b)
 │   ├── model/
 │   │   ├── FileModel.js          # Per-file data container (path, AST, imports, exports, functions, classes, routes, components)
 │   │   └── ProjectModel.js       # Top-level container: projectName + array of FileModels
@@ -99,7 +99,7 @@ DocumentationEngine.generateDocumentation(projectModel, outputDir, options)
     │
     ├── buildDependencyGraph()  → directed graphlib Graph (nodes=files, edges=local imports)
     ├── computeMetrics()        → { fanIn, fanOut, LOC, complexity, circularDeps, deadFiles, unusedExports }
-    ├── [optional --ai] generateAISummaries() → Groq llama-3.1-8b-instant, populates fileModel.aiSummary
+    ├── [optional --ai] generateAISummaries() → Groq openai/gpt-oss-20b, populates fileModel.aiSummary
     ├── generateMarkdown()      → output/<filepath>.md per file
     ├── generateMermaid()       → output/dependencies.mermaid + output/classes.mermaid
     ├── generateArchitectureReport() → output/ARCHITECTURE.md
@@ -121,7 +121,7 @@ Chat Engine (chatEngine.js):
         ├── [if arch query] read ARCHITECTURE.md → inject as context
         ├── [always] getDataFlowContext()  → extract matching edges from dependencies.mermaid
         ├── buildRAGPrompt()               → assemble system + context + user question
-        └── groq.chat.completions.create() → llama-3.1-8b-instant, max_tokens: 1024, temp: 0.2
+        └── groq.chat.completions.create() → openai/gpt-oss-20b, max_tokens: 1024, temp: 0.2
 
 Agent Engine (agentEngine.js):
     executeAgentTask(taskType, targetFile, outputDir)
@@ -209,7 +209,7 @@ npx faro agent <taskType> [targetFile] [-o outputDir]
 | Mermaid output | Raw string generation | — | No mermaid package needed |
 | Embeddings | native fetch | — | gemini-embedding-001, 768-dim |
 | Vector store | @qdrant/js-client-rest | ^1.12.0 | Qdrant vector database |
-| LLM | groq-sdk | ^1.3.0 | model: llama-3.1-8b-instant |
+| LLM | groq-sdk | ^1.3.0 | model: openai/gpt-oss-20b |
 | Terminal UI | chalk, ora | ^5.6.2, ^9.4.1 | |
 | Env vars | dotenv | ^17.4.2 | |
 | Module system | ES Modules only | — | `"type": "module"` in package.json |

@@ -8,7 +8,7 @@ This guide provides step-by-step instructions on how to run and utilize all feat
 
 ## Prerequisites
 
-Faro leverages **Groq** for high-speed, accurate AI inference using the `llama-3.1-8b-instant` model.
+Faro leverages **Groq** for high-speed, accurate AI inference using the `openai/gpt-oss-20b` model.
 
 1. Get a free API key at [Groq Console](https://console.groq.com/keys)
 2. Create a `.env` file in the root of the Faro repository and add your key:
