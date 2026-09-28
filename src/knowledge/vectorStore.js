@@ -24,22 +24,35 @@ export class VectorStore {
      * Ensure the Qdrant collection exists.
      */
     async ensureCollection() {
-        try {
-            await this.client.getCollection(this.collectionName);
-            // Collection already exists, nothing to do
-        } catch (err) {
-            // Only create if it genuinely doesn't exist (404)
-            if (err?.status === 404 || err?.data?.status?.error?.includes('Not found')) {
-                await this.client.createCollection(this.collectionName, {
-                    vectors: {
-                        size: VECTOR_DIMENSION,
-                        distance: 'Cosine',
-                    },
-                });
-            } else {
-                throw err; // Re-throw anything unexpected
-            }
+        // If already ensured this instance, skip immediately
+        if (this._collectionEnsured) return;
+
+        // If another call is already in progress, wait for it
+        if (!this._ensurePromise) {
+            this._ensurePromise = (async () => {
+                let exists = false;
+                try {
+                    await this.client.getCollection(this.collectionName);
+                    exists = true;
+                } catch (_) {
+                    exists = false;
+                }
+
+                if (!exists) {
+                    await this.client.createCollection(this.collectionName, {
+                        vectors: {
+                            size: VECTOR_DIMENSION,
+                            distance: 'Cosine',
+                        },
+                    });
+                    console.log(`\nCreated Qdrant collection: ${this.collectionName} (dim: ${VECTOR_DIMENSION})`);
+                }
+
+                this._collectionEnsured = true;
+            })();
         }
+
+        await this._ensurePromise;
     }
 
     /**

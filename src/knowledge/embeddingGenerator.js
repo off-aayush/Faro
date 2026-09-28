@@ -1,68 +1,65 @@
-import crypto from "crypto";
-import chalk from "chalk";
-import { getVoyageClient } from "../core/voyageClient.js";
+import crypto from 'crypto';
 
-/**
- * Dimension size of the embedding vectors from voyage-code-3.
- */
-export const VECTOR_DIMENSION = 1024;
+export const VECTOR_DIMENSION = 768;
 
-const embeddingCache = new Map();
+const cache = new Map();
 
-/**
- * Generate a dense vector embedding for a given text or code snippet using Voyage AI.
- * 
- * @param {string} text
- * @returns {Promise<number[]>} - Vector of size `VECTOR_DIMENSION`
- */
-export async function generateEmbedding(text) {
-    if (!text || text.trim() === "") {
-        return new Array(VECTOR_DIMENSION).fill(0);
-    }
+function normalize(vector) {
+    const magnitude = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0));
+    return magnitude ? vector.map(val => val / magnitude) : vector;
+}
 
-    const hash = crypto.createHash("sha256").update(text).digest("hex");
-    if (embeddingCache.has(hash)) {
-        return embeddingCache.get(hash);
-    }
+export async function generateEmbedding(text, retries = 3, taskType = 'RETRIEVAL_DOCUMENT') {
+    const key = crypto.createHash('sha256').update(text + taskType).digest('hex');
+    if (cache.has(key)) return cache.get(key);
 
-    try {
-        const client = getVoyageClient();
-        const response = await client.embed({
-            input: [text],
-            model: "voyage-code-3"
-        });
+    const apiKey = process.env.GOOGLE_API_KEY;
+    if (!apiKey) throw new Error('GOOGLE_API_KEY is not set in your .env file');
 
-        const vector = response.data[0].embedding;
-        embeddingCache.set(hash, vector);
-        return vector;
-    } catch (error) {
-        console.warn(chalk.yellow(`\nWarning: Failed to generate embedding - ${error.message}`));
-        return new Array(VECTOR_DIMENSION).fill(0);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${apiKey}`;
+
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: 'models/gemini-embedding-001',
+                    content: {
+                        parts: [{ text }]
+                    },
+                    taskType,
+                    outputDimensionality: VECTOR_DIMENSION
+                })
+            });
+
+            if (!response.ok) {
+                const body = await response.text();
+                throw new Error(`${response.status} ${body}`);
+            }
+
+            const data = await response.json();
+            const embedding = normalize(data.embedding.values);
+            cache.set(key, embedding);
+            return embedding;
+
+        } catch (err) {
+            const is429 = err.message?.includes('429') || err.message?.includes('quota');
+            if (is429 && attempt < retries) {
+                const wait = attempt * 10000;
+                console.warn(`\nRate limited, retrying in ${wait / 1000}s... (attempt ${attempt}/${retries})`);
+                await new Promise(r => setTimeout(r, wait));
+            } else {
+                console.warn(`\nWarning: Failed to generate embedding - ${err.message}`);
+                return new Array(VECTOR_DIMENSION).fill(0);
+            }
+        }
     }
 }
 
-/**
- * Calculate Cosine Similarity between two vectors.
- *
- * @param {number[]} vecA
- * @param {number[]} vecB
- * @returns {number} - Similarity score between 0.0 and 1.0
- */
 export function calculateCosineSimilarity(vecA, vecB) {
-    if (!vecA || !vecB || vecA.length !== vecB.length) return 0;
-
-    let dot = 0;
-    let normA = 0;
-    let normB = 0;
-
-    for (let i = 0; i < vecA.length; i++) {
-        dot += vecA[i] * vecB[i];
-        normA += vecA[i] * vecA[i];
-        normB += vecB[i] * vecB[i];
-    }
-    
-    if (normA === 0 || normB === 0) return 0;
-    const similarity = dot / (Math.sqrt(normA) * Math.sqrt(normB));
-    
-    return Math.max(0, Math.min(1, similarity));
+    const dot = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
+    const magA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0));
+    const magB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0));
+    return magA && magB ? dot / (magA * magB) : 0;
 }

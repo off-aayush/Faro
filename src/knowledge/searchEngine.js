@@ -11,35 +11,31 @@ import { VectorStore } from "./vectorStore.js";
  * @param {string} outputDir
  * @returns {Promise<VectorStore>}
  */
-export async function buildAndSaveVectorStore(projectModel, outputDir) {
-    console.log(chalk.blue("Building vector store & generating embeddings..."));
+export async function buildAndSaveVectorStore(chunks, outputDir) {
+    const store = new VectorStore();
+    const BATCH_SIZE = 20;
+    const DELAY_MS = 1500; // stay well under 100 RPM
 
-    const chunks = buildRepositoryIndex(projectModel);
-    const store = new VectorStore(projectModel.projectName);
+    for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+        const batch = chunks.slice(i, i + BATCH_SIZE);
 
-    const spinner = ora("Embedding chunks").start();
-    let embeddedCount = 0;
+        await Promise.all(
+            batch.map(async (chunk) => {
+                const vector = await generateEmbedding(chunk.content);
+                await store.add(chunk, vector);
+            })
+        );
 
-    const batchSize = 20;
-    for (let i = 0; i < chunks.length; i += batchSize) {
-        const batch = chunks.slice(i, i + batchSize);
-        
-        await Promise.all(batch.map(async (chunk) => {
-            const textToEmbed = `${chunk.filePath} ${chunk.name} ${chunk.content}`;
-            const vector = await generateEmbedding(textToEmbed);
-            await store.add(chunk, vector);
-            
-            embeddedCount++;
-            spinner.text = `Embedding chunk ${embeddedCount}/${chunks.length}`;
-        }));
+        const progress = Math.min(i + BATCH_SIZE, chunks.length);
+        process.stdout.write(`\r  Embedding chunks: ${progress}/${chunks.length}`);
 
-        if (i + batchSize < chunks.length) {
-            await new Promise(resolve => setTimeout(resolve, 50));
+        // Delay between batches to respect rate limits
+        if (i + BATCH_SIZE < chunks.length) {
+            await new Promise(r => setTimeout(r, DELAY_MS));
         }
     }
 
-    spinner.succeed(`Embedded ${chunks.length} chunks successfully.`);
-
+    console.log(); // newline after progress
     await store.save(outputDir);
     return store;
 }
@@ -62,7 +58,7 @@ export async function searchRepository(query, outputDir = "output", topK = 5) {
         return [];
     }
 
-    const queryVector = await generateEmbedding(query);
+    const queryVector = await generateEmbedding(query, 3, 'RETRIEVAL_QUERY');
     const results = await store.search(queryVector, topK);
 
     return results;
@@ -85,20 +81,20 @@ export function displaySearchResults(query, results) {
     results.forEach((res, idx) => {
         const { score, chunk } = res;
         const confidencePct = Math.round(score * 100);
-        
+
         let headerColor = chalk.green;
         if (confidencePct < 40) headerColor = chalk.yellow;
         if (confidencePct < 20) headerColor = chalk.dim;
 
         console.log(headerColor(`[${idx + 1}] ${chunk.type.toUpperCase()}: ${chunk.id} (Relevance: ${confidencePct}%)`));
         console.log(chalk.dim(`    File: ${chunk.filePath}`));
-        
+
         if (chunk.loc) {
             console.log(chalk.dim(`    Lines: L${chunk.loc.start.line}-L${chunk.loc.end.line}`));
         }
 
         console.log(chalk.gray(`    ──────────────────────────────────────────────────`));
-        
+
         // Print snippet (max 8 lines preview)
         const contentLines = chunk.content.split("\n");
         const preview = contentLines.slice(0, 8).map(l => `    ${l}`).join("\n");
