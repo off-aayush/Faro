@@ -3,10 +3,10 @@ import chalk from "chalk";
 import path from "path";
 
 // ─────────────────────────────────────────────────────────────
-//  Groq model to use — llama-3.1-8b-instant is free-tier
+//  Groq model to use — openai/gpt-oss-20b is free-tier
 //  friendly: fast, zero cost, 14,400 req/day, 6,000 req/min
 // ─────────────────────────────────────────────────────────────
-const GROQ_MODEL = "llama-3.1-8b-instant";
+const GROQ_MODEL = "openai/gpt-oss-20b";
 
 // ─────────────────────────────────────────────────────────────
 //  Initialise the Groq client — reads GROQ_API_KEY from env

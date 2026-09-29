@@ -45,7 +45,21 @@ export async function generateDocumentation(projectModel, outputDir, options = {
     const repositoryIndex = buildRepositoryIndex(projectModel);
     await saveRepositoryIndex(repositoryIndex, outputDir);
 
-    await buildAndSaveVectorStore(projectModel, outputDir);
+    // await buildAndSaveVectorStore(projectModel, outputDir);
+
+    // // Build index first, then pass chunks to vector store
+    // const spinner = ora('Building vector store & generating embeddings...').start();
+    // const chunks = buildRepositoryIndex(projectModel, outputDir);
+
+    // if (!chunks || chunks.length === 0) {
+    //     spinner.warn('No chunks generated — skipping vector store build.');
+    // } else {
+    //     await buildAndSaveVectorStore(chunks, outputDir);
+    //     spinner.succeed(`Embedded ${chunks.length} chunks successfully.`);
+    // }
+
+    const chunks = await buildRepositoryIndex(projectModel, outputDir);
+    await buildAndSaveVectorStore(chunks, outputDir);
 
     console.log(chalk.green(`\nDocumentation & Knowledge Store generated successfully in ${outputDir}!`));
     if (options.ai) {

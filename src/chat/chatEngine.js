@@ -4,6 +4,7 @@ import fs from "fs-extra";
 import path from "path";
 import { searchRepository } from "../knowledge/searchEngine.js";
 import { createGroqClient, GROQ_MODEL } from "../core/groqClient.js";
+import { streamRAGAnswer } from "./ragChain.js";
 
 /**
  * Determine if the query is asking about high-level project architecture, circular dependencies, dead code, or metrics.
@@ -11,7 +12,7 @@ import { createGroqClient, GROQ_MODEL } from "../core/groqClient.js";
  * @param {string} query
  * @returns {boolean}
  */
-function isArchitectureQuery(query) {
+export function isArchitectureQuery(query) {
     const keywords = [
         "architecture", "structure", "circular", "dead file", "complexity", 
         "hotspot", "metric", "statistic", "overview", "fan-in", "fan-out", 
@@ -27,7 +28,7 @@ function isArchitectureQuery(query) {
  * @param {string} outputDir
  * @returns {Promise<string>}
  */
-async function getArchitectureContext(outputDir) {
+export async function getArchitectureContext(outputDir) {
     try {
         const archPath = path.join(outputDir, "ARCHITECTURE.md");
         if (await fs.pathExists(archPath)) {
@@ -46,7 +47,7 @@ async function getArchitectureContext(outputDir) {
  * @param {string} outputDir
  * @returns {Promise<string>}
  */
-async function getDataFlowContext(searchResults, outputDir) {
+export async function getDataFlowContext(searchResults, outputDir) {
     if (!searchResults || searchResults.length === 0) return "";
 
     try {
@@ -141,48 +142,19 @@ export function buildRAGPrompt(query, searchResults, architectureContext = "", d
  * @returns {Promise<string>}
  */
 export async function askRepository(query, outputDir = "output") {
-    const groq = createGroqClient();
-
-    console.log(chalk.blue(`🔍 Retrieving repository context for query: "${query}"...`));
-    const searchResults = await searchRepository(query, outputDir, 5);
-
-    if (searchResults.length > 0) {
-        console.log(chalk.dim(`  Found ${searchResults.length} relevant code chunks in knowledge store.`));
-    } else {
-        console.log(chalk.yellow(`  No direct vector matches found. Proceeding with general model knowledge.`));
-    }
-
-    let archContext = "";
-    if (isArchitectureQuery(query)) {
-        console.log(chalk.dim(`  Query matches architecture patterns. Appending ARCHITECTURE.md report context...`));
-        archContext = await getArchitectureContext(outputDir);
-    }
-
-    const flowContext = await getDataFlowContext(searchResults, outputDir);
-    if (flowContext) {
-        console.log(chalk.dim(`  Extracted matching dependency flows from dependencies.mermaid.\n`));
-    } else {
-        console.log();
-    }
-
-    const prompt = buildRAGPrompt(query, searchResults, archContext, flowContext);
-
     console.log(chalk.cyan("🤖 Faro AI is thinking...\n"));
-
-    const completion = await groq.chat.completions.create({
-        model: GROQ_MODEL,
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 1024,
-        temperature: 0.2,
-    });
-
-    const answer = completion.choices[0]?.message?.content?.trim() || "No response generated.";
-
     console.log(chalk.green("--- Repository Assistant Response ---"));
-    console.log(answer);
-    console.log(chalk.green("------------------------------------\n"));
 
-    return answer;
+    const stream = await streamRAGAnswer(query, outputDir);
+    let fullAnswer = "";
+    
+    for await (const chunk of stream) {
+        process.stdout.write(chunk);
+        fullAnswer += chunk;
+    }
+
+    console.log("\n" + chalk.green("------------------------------------\n"));
+    return fullAnswer;
 }
 
 /**
@@ -230,38 +202,23 @@ export async function startInteractiveChat(outputDir = "output") {
         }
 
         try {
-            console.log(chalk.dim(`\n  Searching knowledge store...`));
-            const searchResults = await searchRepository(input, outputDir, 4);
+            process.stdout.write(chalk.cyan("  Thinking...\n"));
+            const stream = await streamRAGAnswer(input, outputDir);
 
-            let archContext = "";
-            if (isArchitectureQuery(input)) {
-                archContext = await getArchitectureContext(outputDir);
+            console.log(chalk.green("\n🤖 Assistant:"));
+            let reply = "";
+            for await (const chunk of stream) {
+                process.stdout.write(chunk);
+                reply += chunk;
             }
-            const flowContext = await getDataFlowContext(searchResults, outputDir);
-
-            const ragPrompt = buildRAGPrompt(input, searchResults, archContext, flowContext);
-
-            conversationHistory.push({ role: "user", content: ragPrompt });
-
-            process.stdout.write(chalk.cyan("  Thinking..."));
-            const completion = await groq.chat.completions.create({
-                model: GROQ_MODEL,
-                messages: conversationHistory,
-                max_tokens: 1024,
-                temperature: 0.3,
-            });
-
-            const reply = completion.choices[0]?.message?.content?.trim() || "No response generated.";
+            console.log("\n");
 
             // Keep history manageable (system prompt + last 6 messages)
+            conversationHistory.push({ role: "user", content: input });
             conversationHistory.push({ role: "assistant", content: reply });
             if (conversationHistory.length > 7) {
                 conversationHistory.splice(1, conversationHistory.length - 7);
             }
-
-            process.stdout.write("\r" + " ".repeat(20) + "\r"); // Clear 'Thinking...'
-            console.log(chalk.green("\n🤖 Assistant:"));
-            console.log(reply + "\n");
         } catch (err) {
             console.error(chalk.red(`\n  Error: ${err.message}\n`));
         }
