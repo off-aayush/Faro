@@ -6,7 +6,7 @@ import "dotenv/config";
  *
  * @type {string}
  */
-export const GROQ_MODEL = "llama-3.1-8b-instant";
+export const GROQ_MODEL = "openai/gpt-oss-20b";
 
 /**
  * Initialize and return a Groq API client using the GROQ_API_KEY environment variable.

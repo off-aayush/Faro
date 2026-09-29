@@ -24,6 +24,43 @@ export async function startCLI() {
             const project = await loadProject(projectPath);
             await generateDocumentation(project, "output", options);
         });
+        
+    program
+        .command("reindex <projectPath>")
+        .description("Force a full re-embedding and re-upsert into Qdrant")
+        .option("--ai", "Generate AI narrative summaries using Groq (requires GROQ_API_KEY)")
+        .action(async (projectPath, options) => {
+            const project = await loadProject(projectPath);
+            const { VectorStore } = await import("../knowledge/vectorStore.js");
+            const store = new VectorStore(project.projectName);
+            try {
+                // Ignore error if it doesn't exist
+                await store.client.deleteCollection(store.collectionName);
+            } catch (err) {}
+            await generateDocumentation(project, "output", options);
+        });
+        
+    program
+        .command("status")
+        .description("Check Qdrant vector database status")
+        .action(async () => {
+            const { VectorStore } = await import("../knowledge/vectorStore.js");
+            const store = new VectorStore();
+            const loaded = await store.load("output");
+            if (loaded) {
+                try {
+                    const info = await store.client.getCollection(store.collectionName);
+                    console.log(chalk.green(`Qdrant Status: Connected`));
+                    console.log(chalk.cyan(`Collection Name: ${store.collectionName}`));
+                    console.log(chalk.cyan(`Points Count: ${info.points_count}`));
+                    console.log(chalk.cyan(`Vector Dimension: ${info.config.params.vectors.size}`));
+                } catch(err) {
+                    console.log(chalk.red(`Failed to fetch Qdrant collection info: ${err.message}`));
+                }
+            } else {
+                console.log(chalk.red(`Qdrant vector store not initialized or missing.`));
+            }
+        });
 
     program
         .command("search <query>")

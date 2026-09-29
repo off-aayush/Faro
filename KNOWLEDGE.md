@@ -24,7 +24,7 @@ Faro/
 │   │   ├── DependencyGraph.js    # Builds a directed graphlib graph from imports
 │   │   ├── DocumentationEngine.js # Orchestrates the full generation pipeline
 │   │   ├── ProjectLoader.js      # Scans → parses → analyzes → builds ProjectModel
-│   │   └── groqClient.js         # Shared Groq SDK factory (model: llama-3.1-8b-instant)
+│   │   └── groqClient.js         # Shared Groq SDK factory (model: openai/gpt-oss-20b)
 │   ├── model/
 │   │   ├── FileModel.js          # Per-file data container (path, AST, imports, exports, functions, classes, routes, components)
 │   │   └── ProjectModel.js       # Top-level container: projectName + array of FileModels
@@ -53,7 +53,8 @@ Faro/
 │   │   ├── vectorStore.js        # ⚠ CURRENT: In-memory array serialised to vector_store.json (brute-force cosine scan)
 │   │   └── searchEngine.js       # buildAndSaveVectorStore() + searchRepository() + displaySearchResults()
 │   ├── chat/
-│   │   └── chatEngine.js         # RAG pipeline: search → augment prompt → Groq → stream reply; REPL loop with conversation history
+│   │   ├── chatEngine.js         # RAG pipeline: search → augment prompt → stream reply; REPL loop with conversation history
+│   │   └── ragChain.js           # LCEL chain for retrieval, context formatting, prompting, and LLM streaming
 │   └── agent/
 │       └── agentEngine.js        # Engineering agent: refactor / test / readme / review / impact / quality tasks
 ├── output/                        # Generated artefacts (git-ignored or committed per preference)
@@ -99,7 +100,7 @@ DocumentationEngine.generateDocumentation(projectModel, outputDir, options)
     │
     ├── buildDependencyGraph()  → directed graphlib Graph (nodes=files, edges=local imports)
     ├── computeMetrics()        → { fanIn, fanOut, LOC, complexity, circularDeps, deadFiles, unusedExports }
-    ├── [optional --ai] generateAISummaries() → Groq llama-3.1-8b-instant, populates fileModel.aiSummary
+    ├── [optional --ai] generateAISummaries() → Groq openai/gpt-oss-20b, populates fileModel.aiSummary
     ├── generateMarkdown()      → output/<filepath>.md per file
     ├── generateMermaid()       → output/dependencies.mermaid + output/classes.mermaid
     ├── generateArchitectureReport() → output/ARCHITECTURE.md
@@ -114,14 +115,15 @@ Knowledge Layer (on search/chat):
         ├── generateEmbedding(query)   → ⚠ 128-dim FNV-1a hash vector
         └── VectorStore.search()       → ⚠ brute-force cosine scan → top-K chunks
 
-Chat Engine (chatEngine.js):
+Chat Engine (ragChain.js & chatEngine.js):
     askRepository(query) / startInteractiveChat()
         │
-        ├── searchRepository()             → retrieve top-5 relevant chunks
-        ├── [if arch query] read ARCHITECTURE.md → inject as context
-        ├── [always] getDataFlowContext()  → extract matching edges from dependencies.mermaid
-        ├── buildRAGPrompt()               → assemble system + context + user question
-        └── groq.chat.completions.create() → llama-3.1-8b-instant, max_tokens: 1024, temp: 0.2
+        └── streamRAGAnswer()
+            ├── [LangChain LCEL] retriever → fetch top-5 relevant chunks from Qdrant
+            ├── [LangChain LCEL] getArchitectureContext() → inject if architecture query
+            ├── [LangChain LCEL] getDataFlowContext() → extract matching edges from dependencies.mermaid
+            ├── [LangChain LCEL] ChatPromptTemplate → assemble system + formatted context + user question
+            └── [LangChain LCEL] ChatGroq → llama-3.1-8b-instant, stream reply
 
 Agent Engine (agentEngine.js):
     executeAgentTask(taskType, targetFile, outputDir)
@@ -207,9 +209,10 @@ npx faro agent <taskType> [targetFile] [-o outputDir]
 | Dependency graph | graphlib | ^2.1.8 | directed graph |
 | File scanning | glob | ^13.0.6 | |
 | Mermaid output | Raw string generation | — | No mermaid package needed |
-| Embeddings | **⚠ Custom FNV-1a hash** | — | 128-dim, NOT neural ML embeddings |
-| Vector store | **⚠ JSON file** | — | `output/vector_store.json`, brute-force scan |
-| LLM | groq-sdk | ^1.3.0 | model: llama-3.1-8b-instant |
+| Embeddings | native fetch | — | gemini-embedding-001, 768-dim |
+| Vector store | @qdrant/js-client-rest | ^1.12.0 | Qdrant vector database |
+| LCEL / RAG | langchain, @langchain/groq, @langchain/community, @langchain/qdrant | latest | LangChain RAG pipeline |
+| LLM | groq-sdk | ^1.3.0 | model: openai/gpt-oss-20b |
 | Terminal UI | chalk, ora | ^5.6.2, ^9.4.1 | |
 | Env vars | dotenv | ^17.4.2 | |
 | Module system | ES Modules only | — | `"type": "module"` in package.json |
@@ -218,17 +221,19 @@ npx faro agent <taskType> [targetFile] [-o outputDir]
 ### Environment Variables
 ```
 GROQ_API_KEY=gsk_...   # Required for chat, agent, and --ai flag
+GOOGLE_API_KEY=...     # Required for Gemini Embeddings
+QDRANT_URL=http://...  # Qdrant vector DB url
 ```
 
 ---
 
 ## 7. Known Limitations (as of Phase 0 / baseline)
 
-1. **Embeddings are not semantic.** `embeddingGenerator.js` uses FNV-1a hash bags — a 128-dimensional TF-IDF approximation. Searching for "authentication logic" will not return results semantically related to "login handler" unless they share tokens. This is the most critical limitation.
+1. ~~**Embeddings are not semantic.** `embeddingGenerator.js` uses FNV-1a hash bags — a 128-dimensional TF-IDF approximation. Searching for "authentication logic" will not return results semantically related to "login handler" unless they share tokens. This is the most critical limitation.~~ *(Resolved in Phase 1)*
 
-2. **Vector store is a flat JSON file.** `vector_store.json` is loaded entirely into memory on every search. No indexing, no filtering, no persistence between Faro instances. Does not scale.
+2. ~~**Vector store is a flat JSON file.** `vector_store.json` is loaded entirely into memory on every search. No indexing, no filtering, no persistence between Faro instances. Does not scale.~~ *(Resolved in Phase 1)*
 
-3. **No LangChain/LangGraph.** The RAG pipeline and agent are hand-rolled. They work but are not composable, not evaluatable with standard tooling, and cannot be swapped out without rewriting them.
+3. ~~**No LangChain/LangGraph.** The RAG pipeline and agent are hand-rolled. They work but are not composable, not evaluatable with standard tooling, and cannot be swapped out without rewriting them.~~ *(RAG resolved in Phase 2, Agent pending Phase 3)*
 
 4. **No persistence for chat sessions.** Conversation history is kept in-memory only. Restarting the CLI loses context.
 
@@ -256,8 +261,8 @@ GROQ_API_KEY=gsk_...   # Required for chat, agent, and --ai flag
 | Phase | Name | Status |
 |---|---|---|
 | 0 | Baseline (CLI, AST, Analyzers, ProjectModel, Mermaid, RAG, Agent) | ✅ Complete |
-| 1 | Real Embeddings + Qdrant Vector DB | ⬜ Not started |
-| 2 | LangChain RAG Pipeline | ⬜ Not started |
+| 1 | Real Embeddings + Qdrant Vector DB | ✅ Complete |
+| 2 | LangChain RAG Pipeline | ✅ Complete |
 | 3 | LangGraph Agentic Workflow | ⬜ Not started |
 | 4 | MCP Server | ⬜ Not started |
 | 5 | Web API + Frontend | ⬜ Not started |
@@ -269,4 +274,6 @@ GROQ_API_KEY=gsk_...   # Required for chat, agent, and --ai flag
 | Date | Phase completed | Summary of changes |
 |---|---|---|
 | Baseline | Phase 0 | Full CLI, AST pipeline, RAG with hash embeddings and JSON vector store, Groq chat and agent |
+| 2026-09-26 | Phase 1 | Replaced hash embeddings with Gemini Embeddings (gemini-embedding-001, 768-dim) and moved to Qdrant vector DB via Docker. |
+| 2026-09-29 | Phase 2 | Ported RAG pipeline to LangChain LCEL (ragChain.js) and @langchain/qdrant retriever. |
 

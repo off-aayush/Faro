@@ -2,6 +2,8 @@ node_modules/
 
 output/
 
+qdrant_storage/
+
 coverage/
 
 .env

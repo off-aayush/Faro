@@ -163,7 +163,7 @@ Create new file: `src/chat/ragChain.js`
   4. Architecture context step: if the question contains architecture keywords (reuse `isArchitectureQuery()` logic from `chatEngine.js`), append `ARCHITECTURE.md` content
   5. Data flow step: extract matching dependency edges from `dependencies.mermaid` for retrieved files
   6. Prompt step: `ChatPromptTemplate.fromMessages([systemMessage, humanMessage])` — system message = "You are Faro AI..." (reuse existing system prompt text), human message = formatted context + question
-  7. LLM step: `new ChatGroq({ model: "llama-3.1-8b-instant", temperature: 0.2, maxTokens: 1024 })`
+  7. LLM step: `new ChatGroq({ model: "openai/gpt-oss-20b", temperature: 0.2, maxTokens: 1024 })`
   8. Output parser: `StringOutputParser`
 - The chain must stream: the final LLM step should support `.stream()` so the CLI can print tokens as they arrive
 - Export `streamRAGAnswer(question, outputDir)` as the main entry point — this calls `chain.stream({ question })` and yields chunks
