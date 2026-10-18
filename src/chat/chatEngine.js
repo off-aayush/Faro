@@ -1,138 +1,7 @@
 import readline from "readline";
 import chalk from "chalk";
-import fs from "fs-extra";
-import path from "path";
-import { searchRepository } from "../knowledge/searchEngine.js";
-import { createGroqClient, GROQ_MODEL } from "../core/groqClient.js";
 import { streamRAGAnswer } from "./ragChain.js";
-
-/**
- * Determine if the query is asking about high-level project architecture, circular dependencies, dead code, or metrics.
- *
- * @param {string} query
- * @returns {boolean}
- */
-export function isArchitectureQuery(query) {
-    const keywords = [
-        "architecture", "structure", "circular", "dead file", "complexity", 
-        "hotspot", "metric", "statistic", "overview", "fan-in", "fan-out", 
-        "coupling", "dependency graph", "dead code"
-    ];
-    const lower = query.toLowerCase();
-    return keywords.some(kw => lower.includes(kw));
-}
-
-/**
- * Load global project architecture summary from ARCHITECTURE.md if available.
- *
- * @param {string} outputDir
- * @returns {Promise<string>}
- */
-export async function getArchitectureContext(outputDir) {
-    try {
-        const archPath = path.join(outputDir, "ARCHITECTURE.md");
-        if (await fs.pathExists(archPath)) {
-            return await fs.readFile(archPath, "utf8");
-        }
-    } catch (err) {
-        // ignore
-    }
-    return "";
-}
-
-/**
- * Retrieve related data flow edges from dependencies.mermaid based on retrieved search results.
- *
- * @param {Array<{ score: number, chunk: Object }>} searchResults
- * @param {string} outputDir
- * @returns {Promise<string>}
- */
-export async function getDataFlowContext(searchResults, outputDir) {
-    if (!searchResults || searchResults.length === 0) return "";
-
-    try {
-        const mermaidPath = path.join(outputDir, "dependencies.mermaid");
-        if (await fs.pathExists(mermaidPath)) {
-            const mermaidContent = await fs.readFile(mermaidPath, "utf8");
-            const lines = mermaidContent.split(/\r?\n/);
-
-            // Gather cleaned path names for retrieved files
-            const cleanedPaths = [...new Set(searchResults.map(res => {
-                const fp = res.chunk.filePath;
-                return fp.replace(/[^a-zA-Z0-9]/g, "_");
-            }))];
-
-            // Extract edge lines containing any of the cleaned paths
-            const matchedEdges = [];
-            lines.forEach(line => {
-                if (line.includes("-->")) {
-                    const matches = cleanedPaths.some(cp => line.includes(cp));
-                    if (matches) {
-                        matchedEdges.push(line.trim());
-                    }
-                }
-            });
-
-            if (matchedEdges.length > 0) {
-                return matchedEdges.join("\n");
-            }
-        }
-    } catch (err) {
-        // ignore
-    }
-    return "";
-}
-
-/**
- * Build a RAG context prompt from retrieved code chunks, global architecture context, and data flow.
- *
- * @param {string} query
- * @param {Array<{ score: number, chunk: Object }>} searchResults
- * @param {string} [architectureContext=""]
- * @param {string} [dataFlowContext=""]
- * @returns {string}
- */
-export function buildRAGPrompt(query, searchResults, architectureContext = "", dataFlowContext = "") {
-    const lines = [
-        `You are Faro AI, the lead repository intelligence assistant.`,
-        `Your task is to answer user questions about this codebase accurately, using the retrieved code context and global context below.`,
-        `Rules:`,
-        `1. Rely primarily on the provided Code Context, Global Architecture, and Data Flow details.`,
-        `2. Always reference file paths and line ranges (e.g. \`src/core/DependencyGraph.js:L4-L54\`) when explaining code.`,
-        `3. Provide clear, concise, professional code explanations and refactoring suggestions when asked.`,
-        ``
-    ];
-
-    if (architectureContext) {
-        lines.push(`--- GLOBAL ARCHITECTURE & METRICS ---`);
-        lines.push(architectureContext);
-        lines.push(`--- END GLOBAL ARCHITECTURE ---`, ``);
-    }
-
-    if (dataFlowContext) {
-        lines.push(`--- RELATED DATA FLOW & DEPENDENCIES ---`);
-        lines.push(dataFlowContext);
-        lines.push(`--- END RELATED DATA FLOW ---`, ``);
-    }
-
-    lines.push(`--- RETRIEVED CODE CONTEXT ---`);
-    if (!searchResults || searchResults.length === 0) {
-        lines.push(`(No specific code chunks were retrieved for this query.)`);
-    } else {
-        searchResults.forEach((res, index) => {
-            const chunk = res.chunk;
-            const locStr = chunk.loc ? ` (Lines L${chunk.loc.start.line}-L${chunk.loc.end.line})` : "";
-            lines.push(`[Chunk ${index + 1}] ${chunk.type.toUpperCase()}: ${chunk.filePath}${locStr}`);
-            lines.push(`Content:\n${chunk.content}`);
-            lines.push(`---`);
-        });
-    }
-    lines.push(`--- END RETRIEVED CONTEXT ---`);
-
-    lines.push(`\nUser Question: ${query}`);
-
-    return lines.join("\n");
-}
+export { isArchitectureQuery, getArchitectureContext, getDataFlowContext, buildRAGPrompt } from "./contextHelpers.js";
 
 /**
  * Perform a single-shot RAG Q&A query against the repository knowledge store.
@@ -153,7 +22,7 @@ export async function askRepository(query, outputDir = "output") {
         fullAnswer += chunk;
     }
 
-    console.log("\n" + chalk.green("------------------------------------\n"));
+    console.log(chalk.green("\n------------------------------------\n"));
     return fullAnswer;
 }
 
@@ -164,7 +33,6 @@ export async function askRepository(query, outputDir = "output") {
  * @returns {Promise<void>}
  */
 export async function startInteractiveChat(outputDir = "output") {
-    const groq = createGroqClient();
 
     console.log(chalk.bold.cyan("\n======================================================="));
     console.log(chalk.bold.cyan(" 🤖 Welcome to Faro Repository Intelligence Chat"));
@@ -203,7 +71,7 @@ export async function startInteractiveChat(outputDir = "output") {
 
         try {
             process.stdout.write(chalk.cyan("  Thinking...\n"));
-            const stream = await streamRAGAnswer(input, outputDir);
+            const stream = await streamRAGAnswer(input, outputDir, conversationHistory);
 
             console.log(chalk.green("\n🤖 Assistant:"));
             let reply = "";
@@ -211,7 +79,7 @@ export async function startInteractiveChat(outputDir = "output") {
                 process.stdout.write(chunk);
                 reply += chunk;
             }
-            console.log("\n");
+            console.log(chalk.green("\n"));
 
             // Keep history manageable (system prompt + last 6 messages)
             conversationHistory.push({ role: "user", content: input });

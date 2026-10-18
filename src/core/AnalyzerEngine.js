@@ -14,6 +14,7 @@ const analyzers = [
     analyzeReactComponents
 ];
 
-export function analyze(fileModel) {
-    analyzers.forEach((analyzer) => analyzer(fileModel));
+/** Run all analyzers on a parsed file. */
+export function analyze(fileModel, projectFiles = new Set()) {
+    analyzers.forEach((analyzer) => analyzer(fileModel, projectFiles));
 }

@@ -1,10 +1,9 @@
-import fs from "fs-extra";
-import path from "path";
 import { StringOutputParser } from "@langchain/core/output_parsers";
-import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate } from "@langchain/core/prompts";
-import { RunnableSequence, RunnablePassthrough, RunnableLambda } from "@langchain/core/runnables";
+import { ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
+import { RunnableSequence } from "@langchain/core/runnables";
 import { ChatGroq } from "@langchain/groq";
 import { buildFaroRetriever } from "../knowledge/langchainRetriever.js";
+import { VectorStore } from "../knowledge/vectorStore.js";
 import { GROQ_MODEL } from "../core/groqClient.js";
 
 // LangSmith tracing can be enabled by setting these environment variables:
@@ -13,7 +12,7 @@ import { GROQ_MODEL } from "../core/groqClient.js";
 // LANGCHAIN_PROJECT=faro
 // Sign up at https://smith.langchain.com
 
-import { isArchitectureQuery, getArchitectureContext, getDataFlowContext } from "./chatEngine.js";
+import { isArchitectureQuery, getArchitectureContext, getDataFlowContext } from "./contextHelpers.js";
 
 const systemMessage = `You are Faro AI, the lead repository intelligence assistant.
 Your task is to answer user questions about this codebase accurately, using the retrieved code context and global context below.
@@ -32,8 +31,11 @@ const humanMessageTemplate = `
 User Question: {question}
 `;
 
+/** Build the existing LCEL retrieval and answer chain. */
 export async function buildRAGChain(outputDir = "output") {
-    const retriever = buildFaroRetriever({ topK: 5 });
+    const store = new VectorStore();
+    if (!(await store.load(outputDir))) throw new Error("Qdrant collection missing; run generate or reindex first.");
+    const retriever = buildFaroRetriever({ topK: 5, collectionName: store.collectionName });
     const llm = new ChatGroq({ model: GROQ_MODEL, temperature: 0.2, maxTokens: 1024 });
 
     const formatContext = (docs) => {
@@ -52,16 +54,19 @@ export async function buildRAGChain(outputDir = "output") {
 
     const prompt = ChatPromptTemplate.fromMessages([
         SystemMessagePromptTemplate.fromTemplate(systemMessage),
+        new MessagesPlaceholder("history"),
         HumanMessagePromptTemplate.fromTemplate(humanMessageTemplate.trim())
     ]);
 
     const chain = RunnableSequence.from([
         {
-            question: new RunnablePassthrough(),
-            docs: retriever
+            question: input => input.question,
+            history: input => input.history,
+            docs: input => retriever.invoke(input.question)
         },
         {
             question: (input) => input.question,
+            history: (input) => input.history,
             context: (input) => formatContext(input.docs),
             archSection: async (input) => {
                 if (isArchitectureQuery(input.question)) {
@@ -84,7 +89,10 @@ export async function buildRAGChain(outputDir = "output") {
     return chain;
 }
 
-export async function streamRAGAnswer(question, outputDir = "output") {
+/** Stream an answer with prior user and assistant turns as prompt messages. */
+export async function streamRAGAnswer(question, outputDir = "output", history = []) {
     const chain = await buildRAGChain(outputDir);
-    return await chain.stream(question);
+    const messages = history.filter(turn => turn.role === "user" || turn.role === "assistant")
+        .map(turn => [turn.role === "user" ? "human" : "ai", turn.content]);
+    return await chain.stream({ question, history: messages });
 }

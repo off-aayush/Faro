@@ -2,7 +2,7 @@
 
 import { Command } from "commander";
 import { loadProject } from "../core/ProjectLoader.js";
-import { generateDocumentation } from "../core/DocumentationEngine.js";
+import { generateDocumentation, canGenerateKnowledge } from "../core/DocumentationEngine.js";
 import { searchRepository, displaySearchResults } from "../knowledge/searchEngine.js";
 import { askRepository, startInteractiveChat } from "../chat/chatEngine.js";
 import { executeAgentTask } from "../agent/agentEngine.js";
@@ -31,12 +31,12 @@ export async function startCLI() {
         .option("--ai", "Generate AI narrative summaries using Groq (requires GROQ_API_KEY)")
         .action(async (projectPath, options) => {
             const project = await loadProject(projectPath);
-            const { VectorStore } = await import("../knowledge/vectorStore.js");
-            const store = new VectorStore(project.projectName);
-            try {
-                // Ignore error if it doesn't exist
-                await store.client.deleteCollection(store.collectionName);
-            } catch (err) {}
+            if (await canGenerateKnowledge(project.projectName)) {
+                const { VectorStore } = await import("../knowledge/vectorStore.js");
+                const store = new VectorStore(project.projectName);
+                const exists = await store.client.collectionExists(store.collectionName);
+                if (exists.exists) await store.client.deleteCollection(store.collectionName);
+            }
             await generateDocumentation(project, "output", options);
         });
         
@@ -65,7 +65,7 @@ export async function startCLI() {
     program
         .command("search <query>")
         .description("Perform semantic vector search over the repository knowledge store")
-        .option("-o, --output <outputDir>", "Path to output directory containing vector_store.json", "output")
+        .option("-o, --output <outputDir>", "Path to output directory containing qdrant_meta.json", "output")
         .option("-k, --top <topK>", "Number of top search results to return", "5")
         .action(async (query, options) => {
             const results = await searchRepository(query, options.output, parseInt(options.top, 10));
@@ -75,7 +75,7 @@ export async function startCLI() {
     program
         .command("chat [query]")
         .description("Ask the Faro AI assistant about your codebase. Omit query for interactive REPL mode.")
-        .option("-o, --output <outputDir>", "Path to output directory containing vector_store.json", "output")
+        .option("-o, --output <outputDir>", "Path to output directory containing qdrant_meta.json", "output")
         .action(async (query, options) => {
             if (query) {
                 // Single-shot mode

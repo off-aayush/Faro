@@ -1,96 +1,73 @@
 import { traverseAST } from "../parser/traverse.js";
 
+function componentName(functionPath) {
+    if (functionPath.node.id?.name) return functionPath.node.id.name;
+    const declarator = functionPath.findParent(parent => parent.isVariableDeclarator());
+    if (declarator?.node.id.type === "Identifier") return declarator.node.id.name;
+    return "AnonymousComponent";
+}
+
+function parameterProps(parameter, interfaces) {
+    if (!parameter) return [];
+    if (parameter.type === "ObjectPattern") return parameter.properties.map(property => property.key?.name).filter(Boolean);
+    if (parameter.type !== "Identifier") return [];
+    const annotation = parameter.typeAnnotation?.typeAnnotation;
+    if (annotation?.type === "TSTypeLiteral") return annotation.members.map(member => member.key?.name).filter(Boolean);
+    if (annotation?.type === "TSTypeReference") return interfaces.get(annotation.typeName.name) ?? [];
+    return [];
+}
+
+/** Detect JSX components, including wrapped functions, and collect props and hooks. */
 export function analyzeReactComponents(fileModel) {
     const components = new Map();
+    const interfaces = new Map();
+    const propTypes = new Map();
 
     traverseAST(fileModel.ast, {
-        JSXElement(path) {
-            // Find the closest enclosing function or class
-            const funcPath = path.findParent((p) => p.isFunction() || p.isClass());
-            if (!funcPath) return;
-
-            let name = "AnonymousComponent";
-            let props = [];
-            
-            if (funcPath.isFunctionDeclaration() && funcPath.node.id) {
-                name = funcPath.node.id.name;
-            } else if (funcPath.isArrowFunctionExpression() || funcPath.isFunctionExpression()) {
-                if (funcPath.parentPath.isVariableDeclarator() && funcPath.parentPath.node.id.name) {
-                    name = funcPath.parentPath.node.id.name;
-                }
-            } else if (funcPath.isClassDeclaration() && funcPath.node.id) {
-                name = funcPath.node.id.name;
-            }
-
-            // Only track if it's actually a component-like structure (usually capitalized, but we'll accept any returning JSX)
-            if (!components.has(name)) {
-                if (funcPath.isFunction()) {
-                    const params = funcPath.node.params;
-                    if (params.length > 0) {
-                        if (params[0].type === "ObjectPattern") {
-                            props = params[0].properties.map(prop => prop.key ? prop.key.name : "...");
-                        } else if (params[0].type === "Identifier") {
-                            props = ["props"]; 
-                        }
-                    }
-                }
-
-                components.set(name, {
-                    name,
-                    props,
-                    hooks: new Set(),
-                    jsxElements: new Set(),
-                    path: funcPath
-                });
-            }
-
-            // Extract JSX Element names
-            let elementName = "<Unknown>";
-            if (path.node.openingElement.name.type === "JSXIdentifier") {
-                elementName = path.node.openingElement.name.name;
-            } else if (path.node.openingElement.name.type === "JSXMemberExpression") {
-                elementName = `${path.node.openingElement.name.object.name}.${path.node.openingElement.name.property.name}`;
-            }
-            
-            components.get(name).jsxElements.add(elementName);
+        TSInterfaceDeclaration(astPath) {
+            interfaces.set(astPath.node.id.name, astPath.node.body.body.map(member => member.key?.name).filter(Boolean));
         },
-        JSXFragment(path) {
-            const funcPath = path.findParent((p) => p.isFunction() || p.isClass());
-            if (!funcPath) return;
-            
-            let name = "AnonymousComponent";
-            if (funcPath.isFunctionDeclaration() && funcPath.node.id) name = funcPath.node.id.name;
-            else if ((funcPath.isArrowFunctionExpression() || funcPath.isFunctionExpression()) && funcPath.parentPath.isVariableDeclarator()) name = funcPath.parentPath.node.id.name;
-            
-            if (!components.has(name)) {
-                 components.set(name, {
-                    name,
-                    props: [],
-                    hooks: new Set(),
-                    jsxElements: new Set(),
-                    path: funcPath
-                });
+        AssignmentExpression(astPath) {
+            const { left, right } = astPath.node;
+            if (left.type === "MemberExpression" && left.property.name === "propTypes" && left.object.type === "Identifier" && right.type === "ObjectExpression") {
+                propTypes.set(left.object.name, right.properties.map(property => property.key?.name).filter(Boolean));
             }
-            components.get(name).jsxElements.add("<Fragment>");
-        }
+        },
     });
 
-    // Now find hooks for the components we found
-    for (const [name, comp] of components.entries()) {
-        comp.path.traverse({
-            CallExpression(callPath) {
-                if (callPath.node.callee.type === "Identifier" && callPath.node.callee.name.startsWith("use")) {
-                    comp.hooks.add(callPath.node.callee.name);
-                }
-            }
-        });
+    const collect = (jsxPath, element) => {
+        const owner = jsxPath.findParent(parent => parent.isFunction() || parent.isClass());
+        if (!owner) return;
+        const name = componentName(owner);
+        if (!components.has(name)) {
+            let props = owner.isFunction() ? parameterProps(owner.node.params[0], interfaces) : [];
+            if (!props.length) props = interfaces.get(`${name}Props`) ?? [];
+            components.set(name, { name, props, hooks: new Set(), jsxChildren: new Set(), path: owner });
+        }
+        components.get(name).jsxChildren.add(element);
+    };
 
+    traverseAST(fileModel.ast, {
+        JSXElement(astPath) {
+            const tag = astPath.node.openingElement.name;
+            const element = tag.type === "JSXIdentifier" ? tag.name : tag.type === "JSXMemberExpression" ? `${tag.object.name}.${tag.property.name}` : "<Unknown>";
+            collect(astPath, element);
+        },
+        JSXFragment(astPath) { collect(astPath, "<Fragment>"); },
+    });
+
+    for (const component of components.values()) {
+        component.path.traverse({
+            CallExpression(astPath) {
+                if (astPath.node.callee.type === "Identifier" && astPath.node.callee.name.startsWith("use")) component.hooks.add(astPath.node.callee.name);
+            },
+        });
         fileModel.components.push({
-            name: comp.name,
-            props: comp.props,
-            hooks: Array.from(comp.hooks),
-            jsxChildren: Array.from(comp.jsxElements),
-            loc: comp.path.node.loc
+            name: component.name,
+            props: [...new Set([...component.props, ...(propTypes.get(component.name) ?? [])])],
+            hooks: [...component.hooks],
+            jsxChildren: [...component.jsxChildren],
+            loc: component.path.node.loc,
         });
     }
 }
