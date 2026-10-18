@@ -2,6 +2,7 @@ import { glob } from "glob";
 import path from "path";
 import fs from "fs-extra";
 
+/** Return supported source files under a project path. */
 export async function scanProject(projectPath) {
     const absolutePath = path.resolve(projectPath);
 
@@ -9,7 +10,7 @@ export async function scanProject(projectPath) {
         throw new Error("Project path does not exist.");
     }
 
-    const files = await glob("**/*.js", {
+    const files = await glob("**/*.{js,jsx,ts,tsx}", {
         cwd: absolutePath,
 
         absolute: false,

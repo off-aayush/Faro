@@ -1,28 +1,6 @@
-import Groq from "groq-sdk";
+import { createGroqClient, GROQ_MODEL } from "../core/groqClient.js";
 import chalk from "chalk";
 import path from "path";
-
-// ─────────────────────────────────────────────────────────────
-//  Groq model to use — openai/gpt-oss-20b is free-tier
-//  friendly: fast, zero cost, 14,400 req/day, 6,000 req/min
-// ─────────────────────────────────────────────────────────────
-const GROQ_MODEL = "openai/gpt-oss-20b";
-
-// ─────────────────────────────────────────────────────────────
-//  Initialise the Groq client — reads GROQ_API_KEY from env
-// ─────────────────────────────────────────────────────────────
-function createClient() {
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey || apiKey.trim() === "") {
-        throw new Error(
-            "GROQ_API_KEY is not set.\n" +
-            "  1. Get a free key (no credit card) at https://console.groq.com/keys\n" +
-            "  2. Add it to your .env file:\n" +
-            "     GROQ_API_KEY=gsk_your_key_here"
-        );
-    }
-    return new Groq({ apiKey });
-}
 
 // ─────────────────────────────────────────────────────────────
 //  Build a compact, token-efficient prompt for a single file
@@ -138,7 +116,7 @@ async function generateWithRetry(groq, prompt, maxRetries = 3) {
 //  Main export: generate AI summaries and attach to fileModels
 // ─────────────────────────────────────────────────────────────
 export async function generateAISummaries(projectModel) {
-    const groq = createClient();
+    const groq = createGroqClient();
 
     const filesToProcess = projectModel.files.filter(hasContent);
     const total = filesToProcess.length;
@@ -203,7 +181,7 @@ function buildFolderPrompt(folderPath, files, subdirs) {
 //  Export: generate AI summary for a single folder
 // ─────────────────────────────────────────────────────────────
 export async function generateAIFolderSummary(folderPath, files, subdirs) {
-    const groq = createClient();
+    const groq = createGroqClient();
     const prompt = buildFolderPrompt(folderPath, files, subdirs);
     return await generateWithRetry(groq, prompt);
 }

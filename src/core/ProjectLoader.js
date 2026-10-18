@@ -9,8 +9,9 @@ import { FileModel } from "../model/FileModel.js";
 
 import { analyze } from "./AnalyzerEngine.js";
 
+/** Load, parse, and analyze supported project source files once each. */
 export async function loadProject(projectPath) {
-    const project = new ProjectModel(path.basename(projectPath));
+    const project = new ProjectModel(path.basename(path.resolve(projectPath)));
 
     const files = await scanProject(projectPath);
 
@@ -19,14 +20,16 @@ export async function loadProject(projectPath) {
 
         const sourceCode = await fs.readFile(absolute, "utf8");
 
-        const ast = parseFile(sourceCode);
+        const ast = parseFile(sourceCode, file);
+        if (!ast) continue;
 
         const fileModel = new FileModel(file, sourceCode, ast);
 
-        analyze(fileModel);
-
         project.addFile(fileModel);
     }
+
+    const filePaths = new Set(project.files.map(file => file.path.replace(/\\/g, "/")));
+    for (const file of project.files) analyze(file, filePaths);
 
     return project;
 }
