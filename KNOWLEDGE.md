@@ -1,279 +1,159 @@
-# Faro — Project Knowledge Base
+﻿# Faro — Project Knowledge Base
 
-> **This is a living document.** Every time a development phase completes, update the relevant sections to reflect the new state of the project. The AI assistant working on each phase is responsible for updating this file before closing the session.
-
----
+> Update this document when a development phase completes. `ProjectModel` is the source of truth for documentation, metrics, graphs, and the knowledge layer.
 
 ## 1. Project Vision
 
-Faro is a **Repository Intelligence Platform** for JavaScript/TypeScript projects. It is not a Markdown documentation generator — it is a system that understands a codebase through static analysis, builds a semantic knowledge model, generates documentation and architecture visualisations, and powers an AI assistant capable of answering questions about the repository.
-
-**The core principle:** `ProjectModel` is the single source of truth. Every feature — documentation, graphs, metrics, embeddings, chat — is derived from it.
-
----
+Faro is a Repository Intelligence Platform for JavaScript and TypeScript projects. It scans source code, builds a static model, produces Markdown and Mermaid documentation, and can add semantic search and repository chat when its external services are available.
 
 ## 2. Repository Structure
 
-```
-Faro/
-├── src/
-│   ├── cli/
-│   │   └── index.js              # Commander.js CLI — entry point for all commands
-│   ├── core/
-│   │   ├── AnalyzerEngine.js     # Runs all analyzers sequentially on a FileModel
-│   │   ├── DependencyGraph.js    # Builds a directed graphlib graph from imports
-│   │   ├── DocumentationEngine.js # Orchestrates the full generation pipeline
-│   │   ├── ProjectLoader.js      # Scans → parses → analyzes → builds ProjectModel
-│   │   └── groqClient.js         # Shared Groq SDK factory (model: openai/gpt-oss-20b)
-│   ├── model/
-│   │   ├── FileModel.js          # Per-file data container (path, AST, imports, exports, functions, classes, routes, components)
-│   │   └── ProjectModel.js       # Top-level container: projectName + array of FileModels
-│   ├── scanner/
-│   │   └── scanProject.js        # glob("**/*.js") with standard ignore list → sorted file paths
-│   ├── parser/
-│   │   └── parser.js             # Babel parser with JSX, classProperties, dynamicImport, optionalChaining
-│   ├── analyzers/
-│   │   ├── importAnalyzer.js     # Populates fileModel.imports (source, type: local|external, specifiers)
-│   │   ├── exportAnalyzer.js     # Populates fileModel.exports (name, type, source)
-│   │   ├── functionAnalyzer.js   # Populates fileModel.functions (name, async, params, loc, type)
-│   │   ├── classAnalyzer.js      # Populates fileModel.classes (name, superClass, properties, methods, loc)
-│   │   ├── routeAnalyzer.js      # Populates fileModel.routes (method, path, handler, middleware, loc)
-│   │   ├── reactAnalyzer.js      # Populates fileModel.components (name, props, hooks, jsxChildren, loc)
-│   │   └── metricsAnalyzer.js    # Computes fan-in, fan-out, LOC, complexity, circular deps, dead files
-│   ├── generators/
-│   │   ├── markdownGenerator.js          # Writes output/<filepath>.md for every file
-│   │   ├── mermaidGenerator.js           # Writes output/dependencies.mermaid + output/classes.mermaid
-│   │   ├── aiGenerator.js                # Groq-powered AI narrative summaries (--ai flag)
-│   │   ├── architectureReportGenerator.js # Writes output/ARCHITECTURE.md with metrics
-│   │   └── folderSummaryGenerator.js     # Writes per-folder README summaries
-│   ├── knowledge/
-│   │   ├── chunker.js            # Slices FileModels into typed semantic chunks (file/class/function/route/component)
-│   │   ├── indexer.js            # Iterates all files → chunkFile() → flat array → saves repository_index.json
-│   │   ├── embeddingGenerator.js # ⚠ CURRENT: FNV-1a hash bag (128-dim TF-IDF approximation), NOT neural
-│   │   ├── vectorStore.js        # ⚠ CURRENT: In-memory array serialised to vector_store.json (brute-force cosine scan)
-│   │   └── searchEngine.js       # buildAndSaveVectorStore() + searchRepository() + displaySearchResults()
-│   ├── chat/
-│   │   ├── chatEngine.js         # RAG pipeline: search → augment prompt → stream reply; REPL loop with conversation history
-│   │   └── ragChain.js           # LCEL chain for retrieval, context formatting, prompting, and LLM streaming
-│   └── agent/
-│       └── agentEngine.js        # Engineering agent: refactor / test / readme / review / impact / quality tasks
-├── output/                        # Generated artefacts (git-ignored or committed per preference)
-│   ├── vector_store.json          # ⚠ CURRENT: Entire vector store serialised as flat JSON
-│   ├── repository_index.json      # All semantic chunks (no vectors)
-│   ├── ARCHITECTURE.md            # Metrics report with fan-in/out, complexity, dead files
-│   ├── dependencies.mermaid       # Full project dependency flowchart
-│   └── classes.mermaid            # UML class diagram
-├── .env                           # GROQ_API_KEY (gitignored)
-├── .env.example                   # Template for required env vars
-├── package.json                   # name: faro, type: module, node >=20
-└── DEVELOPMENT_PLANS.md           # Original phased roadmap (now superseded by this file + ROADMAP_PROMPTS.md)
+```text
+src/
+  cli/index.js                    Commander CLI: generate, reindex, status, search, chat, agent
+  core/ProjectLoader.js           Scan, parse, and analyze into ProjectModel
+  core/AnalyzerEngine.js          Runs all analyzers
+  core/DependencyGraph.js         Graph from imports, including resolved index files
+  core/DocumentationEngine.js     Separate documentation and knowledge stages
+  core/groqClient.js              createGroqClient() and GROQ_MODEL
+  model/{FileModel,ProjectModel}.js
+  scanner/scanProject.js          Scans .js, .jsx, .ts, .tsx with standard ignores
+  parser/{parser,traverse}.js     Babel parsing and traversal; malformed files skipped
+  analyzers/                     Imports, exports, functions, classes, routes, React, metrics
+  generators/                    Markdown, Mermaid, architecture, folders, optional AI summaries
+  knowledge/chunker.js           Typed semantic chunks
+  knowledge/indexer.js           One repository_index.json per generation
+  knowledge/embeddingGenerator.js Gemini REST embeddings and EmbeddingError
+  knowledge/vectorStore.js       Qdrant query/upsert, deterministic point IDs
+  knowledge/searchEngine.js      Embedding batches and semantic search
+  knowledge/langchainRetriever.js Custom BaseRetriever for Faro's Qdrant payload
+  chat/contextHelpers.js         Architecture and data-flow context, legacy prompt helper
+  chat/ragChain.js               LangChain LCEL RAG chain
+  chat/chatEngine.js             Single question and history-aware REPL
+  agent/agentEngine.js           Engineering agent tasks
+output/
+  ARCHITECTURE.md, dependencies.mermaid, classes.mermaid
+  repository_index.json, qdrant_meta.json, per-file and per-folder Markdown
 ```
 
----
+The unused legacy API client was deleted. The knowledge vectors live in Qdrant; the local JSON files hold chunk and collection metadata.
 
-## 3. Full Pipeline — Step by Step
+## 3. Full Pipeline
 
-```
-CLI command
-    │
-    ▼
-ProjectLoader.loadProject(projectPath)
-    │
-    ├── scanProject()           → glob("**/*.js"), ignores node_modules/.git/dist/build/coverage
-    │
-    ├── for each file:
-    │       fs.readFile()       → sourceCode: string
-    │       parseFile()         → AST (Babel, sourceType: "unambiguous")
-    │       new FileModel()     → { path, sourceCode, ast, imports:[], exports:[], functions:[], classes:[], routes:[], components:[] }
-    │       analyze(fileModel)  → runs all 6 analyzers sequentially:
-    │                               analyzeImports()   → fileModel.imports
-    │                               analyzeFunctions() → fileModel.functions
-    │                               analyzeExports()   → fileModel.exports
-    │                               analyzeClasses()   → fileModel.classes
-    │                               analyzeRoutes()    → fileModel.routes (Express patterns)
-    │                               analyzeReactComponents() → fileModel.components
-    │       project.addFile(fileModel)
-    │
-    └── returns ProjectModel { projectName, files: FileModel[] }
-
-DocumentationEngine.generateDocumentation(projectModel, outputDir, options)
-    │
-    ├── buildDependencyGraph()  → directed graphlib Graph (nodes=files, edges=local imports)
-    ├── computeMetrics()        → { fanIn, fanOut, LOC, complexity, circularDeps, deadFiles, unusedExports }
-    ├── [optional --ai] generateAISummaries() → Groq openai/gpt-oss-20b, populates fileModel.aiSummary
-    ├── generateMarkdown()      → output/<filepath>.md per file
-    ├── generateMermaid()       → output/dependencies.mermaid + output/classes.mermaid
-    ├── generateArchitectureReport() → output/ARCHITECTURE.md
-    ├── generateFolderSummaries()    → per-folder README summaries
-    ├── buildRepositoryIndex()  → flat array of all chunks → output/repository_index.json
-    └── buildAndSaveVectorStore()    → embed all chunks → output/vector_store.json
-
-Knowledge Layer (on search/chat):
-    searchRepository(query)
-        │
-        ├── load vector_store.json into VectorStore.entries[]
-        ├── generateEmbedding(query)   → ⚠ 128-dim FNV-1a hash vector
-        └── VectorStore.search()       → ⚠ brute-force cosine scan → top-K chunks
-
-Chat Engine (ragChain.js & chatEngine.js):
-    askRepository(query) / startInteractiveChat()
-        │
-        └── streamRAGAnswer()
-            ├── [LangChain LCEL] retriever → fetch top-5 relevant chunks from Qdrant
-            ├── [LangChain LCEL] getArchitectureContext() → inject if architecture query
-            ├── [LangChain LCEL] getDataFlowContext() → extract matching edges from dependencies.mermaid
-            ├── [LangChain LCEL] ChatPromptTemplate → assemble system + formatted context + user question
-            └── [LangChain LCEL] ChatGroq → llama-3.1-8b-instant, stream reply
-
-Agent Engine (agentEngine.js):
-    executeAgentTask(taskType, targetFile, outputDir)
-        │
-        ├── getArchitectureContext()       → read ARCHITECTURE.md
-        ├── getDependencyGraphContext()    → read dependencies.mermaid
-        ├── getTargetFileContext()         → read raw file source (for refactor/test/impact)
-        └── groq.chat.completions.create() → task-specific prompt, max_tokens: 2048, temp: 0.2
-            Tasks: refactor | test | readme | review | impact | quality
+```text
+generate <projectPath>
+  ProjectLoader.loadProject()
+    scan **/*.{js,jsx,ts,tsx} (ignoring node_modules, .git, dist, build, coverage)
+    read and parse each file once; warn and skip parse failures
+    analyze valid FileModels, using the valid project file list for import resolution
+    -> ProjectModel { projectName, files }
+  generateDocs(projectModel, outputDir, options) [always]
+    dependency graph -> metrics -> optional Groq AI summaries
+    -> Markdown -> Mermaid -> ARCHITECTURE.md -> folder summaries
+  generateKnowledge(projectModel, outputDir) [when GOOGLE_API_KEY and Qdrant are available]
+    buildRepositoryIndex() once -> repository_index.json
+    -> embed chunks via Gemini -> skip EmbeddingError chunks
+    -> abort when failures exceed 20% -> Qdrant upsert
+    -> qdrant_meta.json { collectionName, totalPoints, timestamp }
 ```
 
----
+Qdrant collection names are `faro_vectors_<projectname>` with lowercase letters, numbers, and underscores. Each point ID is a stable FNV-1a hash of `chunk.id` reduced to a safe integer. Repeating generate overwrites the same logical points. `reindex <projectPath>` deletes that project's collection, then runs the full generate pipeline. `status` reads local metadata and reports the verified collection's point count and vector dimension.
+
+```text
+search <query>
+  qdrant_meta.json -> verify collection -> Gemini RETRIEVAL_QUERY embedding
+  -> Qdrant query() -> top-K chunks
+
+chat [query]
+  custom BaseRetriever -> Qdrant query() -> chunk Documents
+  -> architecture and dependency context -> ChatPromptTemplate
+  -> prior user/assistant turns (REPL) + current question
+  -> ChatGroq via LangChain LCEL -> streamed answer
+```
+
+The REPL keeps a bounded history in memory. The agent reads generated context and calls Groq for refactor, test, readme, review, impact, and quality tasks.
 
 ## 4. Data Models
 
-### FileModel
 ```js
-{
-  path: string,          // relative path from project root e.g. "src/core/DependencyGraph.js"
-  sourceCode: string,    // raw file content
-  ast: BabelAST,         // Babel File node
-  aiSummary: string,     // populated by aiGenerator.js if --ai flag used
-  imports: [{ source, type: "local"|"external", specifiers }],
-  exports: [{ name, type, source }],
-  functions: [{ name, async, params, loc, type }],
-  classes: [{ name, superClass, properties, methods:[{name}], loc }],
-  routes: [{ method, path, handler, middleware, loc }],
+ProjectModel { projectName: string, files: FileModel[] }
+FileModel {
+  path, sourceCode, ast, aiSummary,
+  imports: [{ source, type: 'local'|'external'|'dynamic', specifiers,
+              isDynamic, isRequire, resolvedPath? }],
+  exports, functions, classes, routes,
   components: [{ name, props, hooks, jsxChildren, loc }]
 }
-```
-
-### ProjectModel
-```js
-{
-  projectName: string,   // basename of the scanned directory
-  files: FileModel[]
+Chunk {
+  id, type: 'file'|'class'|'function'|'route'|'component',
+  filePath, name, loc, content, metadata
 }
 ```
 
-### Chunk (knowledge layer)
-```js
-{
-  id: string,            // "file:src/core/X.js" | "class:src/...#ClassName" | "function:...#fnName" | "route:...#METHOD:path" | "component:...#Name"
-  type: "file" | "class" | "function" | "route" | "component",
-  filePath: string,
-  name: string,
-  loc: { start: { line, column }, end: { line, column } },
-  content: string,       // sliced source code or descriptive text
-  metadata: {}           // type-specific fields (methods, params, hooks, etc.)
-}
-```
-
----
+Chunks are derived from FileModels. The index contains no vectors. `qdrant_meta.json` identifies the collection; Qdrant stores the vectors and full chunk payloads.
 
 ## 5. CLI Commands
 
 ```bash
-# Default: generate docs + knowledge store
-npx faro generate <projectPath> [--ai]
-
-# Semantic search over vector store
-npx faro search "<query>" [-o outputDir] [-k topK]
-
-# Ask a single question
-npx faro chat "<question>" [-o outputDir]
-
-# Interactive REPL chat
-npx faro chat [-o outputDir]
-
-# Agent task
-npx faro agent <taskType> [targetFile] [-o outputDir]
-# taskType: refactor | test | readme | review | impact | quality
+node src/index.js generate <projectPath> [--ai]
+node src/index.js reindex <projectPath> [--ai]
+node src/index.js status
+node src/index.js search "<query>" [-o outputDir] [-k topK]
+node src/index.js chat [query] [-o outputDir]
+node src/index.js agent <taskType> [targetFile] [-o outputDir]
 ```
 
----
+Omitting `query` starts the chat REPL. The command names and arguments are unchanged.
 
-## 6. Tech Stack (Current State)
+## 6. Tech Stack
 
-| Concern | Package | Version | Notes |
-|---|---|---|---|
-| CLI framework | commander | ^15.0.0 | |
-| AST parsing | @babel/parser, @babel/traverse, @babel/types | ^7.29.7 | sourceType: unambiguous |
-| Dependency graph | graphlib | ^2.1.8 | directed graph |
-| File scanning | glob | ^13.0.6 | |
-| Mermaid output | Raw string generation | — | No mermaid package needed |
-| Embeddings | native fetch | — | gemini-embedding-001, 768-dim |
-| Vector store | @qdrant/js-client-rest | ^1.12.0 | Qdrant vector database |
-| LCEL / RAG | langchain, @langchain/groq, @langchain/community, @langchain/qdrant | latest | LangChain RAG pipeline |
-| LLM | groq-sdk | ^1.3.0 | model: openai/gpt-oss-20b |
-| Terminal UI | chalk, ora | ^5.6.2, ^9.4.1 | |
-| Env vars | dotenv | ^17.4.2 | |
-| Module system | ES Modules only | — | `"type": "module"` in package.json |
-| Runtime | Node.js | >=20 | |
+| Concern | Package/API | Notes |
+|---|---|---|
+| Runtime and modules | Node.js >=20, ES Modules | `type: module` |
+| CLI | commander, chalk | User-facing output is colored |
+| Scanning and parsing | glob, @babel/parser, @babel/traverse | JSX and TypeScript plugins |
+| Graph | graphlib | Directed import graph |
+| Embeddings | Google Gemini `gemini-embedding-001` via REST (v1beta) | 768-dimensional normalized vectors |
+| Vector database | @qdrant/js-client-rest, Qdrant | `query()` API, project collections, deterministic IDs |
+| LLM | `openai/gpt-oss-20b` via Groq SDK | `GROQ_MODEL` constant in `groqClient.js` |
+| RAG | LangChain LCEL, @langchain/groq, custom BaseRetriever | Faro payload mapping and prompt history |
+| Environment | dotenv | `.env` loaded by CLI pipeline |
 
-### Environment Variables
-```
-GROQ_API_KEY=gsk_...   # Required for chat, agent, and --ai flag
-GOOGLE_API_KEY=...     # Required for Gemini Embeddings
-QDRANT_URL=http://...  # Qdrant vector DB url
-```
+`GOOGLE_API_KEY` enables embeddings and semantic search. `GROQ_API_KEY` enables chat, agent tasks, and `--ai` summaries. `QDRANT_URL` defaults to `http://localhost:6333`. LangSmith tracing variables are optional.
 
----
+## 7. Known Limitations
 
-## 7. Known Limitations (as of Phase 0 / baseline)
+- Chat history is in memory and is lost when the CLI exits.
+- No automated test suite is configured in `package.json`.
+- The interface is CLI-only.
+- Resolved in stabilization: duplicate index build, chat/RAG circular dependency, zero-vector corruption, unused chat history, inconsistent collection naming, and limited source extensions.
 
-1. ~~**Embeddings are not semantic.** `embeddingGenerator.js` uses FNV-1a hash bags — a 128-dimensional TF-IDF approximation. Searching for "authentication logic" will not return results semantically related to "login handler" unless they share tokens. This is the most critical limitation.~~ *(Resolved in Phase 1)*
+## 8. Architecture Decisions
 
-2. ~~**Vector store is a flat JSON file.** `vector_store.json` is loaded entirely into memory on every search. No indexing, no filtering, no persistence between Faro instances. Does not scale.~~ *(Resolved in Phase 1)*
-
-3. ~~**No LangChain/LangGraph.** The RAG pipeline and agent are hand-rolled. They work but are not composable, not evaluatable with standard tooling, and cannot be swapped out without rewriting them.~~ *(RAG resolved in Phase 2, Agent pending Phase 3)*
-
-4. **No persistence for chat sessions.** Conversation history is kept in-memory only. Restarting the CLI loses context.
-
-5. **Scanner only covers `.js` files.** TypeScript, JSX, and TSX files are not scanned.
-
-6. **No test suite.** `package.json` has `"test": "echo No tests yet"`.
-
-7. **CLI-only interface.** No API server, no web UI — not demonstrable to non-technical people.
-
----
-
-## 8. Architecture Decisions & Rationale
-
-- **ES Modules only** — enforced via `"type": "module"` in package.json. All imports use `.js` extension. Do not introduce CommonJS.
-- **ProjectModel as single source of truth** — all generators and the knowledge layer consume `ProjectModel`. Raw file access in generators is prohibited.
-- **Analyzers are pure functions** — each analyzer takes a `FileModel` and mutates it in-place. They are stateless and independently testable.
-- **AnalyzerEngine is a registry** — add a new analyzer by importing and pushing to the `analyzers` array.
-- **groqClient is a shared factory** — import `createGroqClient()` from `src/core/groqClient.js`. Never instantiate `new Groq()` directly elsewhere.
-- **Output directory convention** — all artefacts go to `./output/` by default. This is configurable via `--output` CLI flag.
-
----
+- ES Modules only; use `.js` extensions for local imports.
+- `ProjectModel` is the single source for generated outputs.
+- Analyzers mutate one FileModel, while the loader supplies the valid project file list to import analysis.
+- Documentation generation works without external services. Knowledge generation is conditional on Gemini credentials and Qdrant availability.
+- `createGroqClient()` and `GROQ_MODEL` centralize Groq SDK configuration.
+- Generated artifacts go to `output/` by default.
 
 ## 9. Development Status
 
 | Phase | Name | Status |
 |---|---|---|
-| 0 | Baseline (CLI, AST, Analyzers, ProjectModel, Mermaid, RAG, Agent) | ✅ Complete |
-| 1 | Real Embeddings + Qdrant Vector DB | ✅ Complete |
-| 2 | LangChain RAG Pipeline | ✅ Complete |
-| 3 | LangGraph Agentic Workflow | ⬜ Not started |
-| 4 | MCP Server | ⬜ Not started |
-| 5 | Web API + Frontend | ⬜ Not started |
-
----
+| 0 | Baseline CLI, static model, documentation, chat, agent | ✅ Complete |
+| 1 | Gemini embeddings and Qdrant | ✅ Complete |
+| 2 | LangChain LCEL RAG | ✅ Complete |
+| Stabilization | Correctness, configuration, scanner and analyzer repairs | ✅ Complete |
+| 3 | LangGraph agentic workflow | Not started |
+| 4 | MCP server | Not started |
+| 5 | Web API and frontend | Not started |
 
 ## 10. Update Log
 
-| Date | Phase completed | Summary of changes |
+| Date | Phase | Summary |
 |---|---|---|
-| Baseline | Phase 0 | Full CLI, AST pipeline, RAG with hash embeddings and JSON vector store, Groq chat and agent |
-| 2026-09-26 | Phase 1 | Replaced hash embeddings with Gemini Embeddings (gemini-embedding-001, 768-dim) and moved to Qdrant vector DB via Docker. |
-| 2026-09-29 | Phase 2 | Ported RAG pipeline to LangChain LCEL (ragChain.js) and @langchain/qdrant retriever. |
-
+| Baseline | 0 | CLI, AST pipeline, documentation, chat, agent |
+| 2026-09-26 | 1 | Gemini embeddings and Qdrant |
+| 2026-09-29 | 2 | LCEL RAG and custom Qdrant retriever |
+| 2026-10-18 | Stabilization | Split docs/knowledge stages; corrected embeddings, IDs, collection lifecycle, chat history, parser/scanner/import/React analysis, and setup guidance. |

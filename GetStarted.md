@@ -1,146 +1,58 @@
-# Faro: Repository Intelligence Platform
+﻿# Get started with Faro
 
-Faro is a powerful, AI-driven Repository Intelligence Platform. It goes beyond simple documentation generation by parsing your entire codebase, generating an internal knowledge model, and powering an interactive AI assistant and Engineering Agent capable of reasoning about your project's architecture.
+Faro scans JavaScript and TypeScript repositories to produce Markdown documentation, Mermaid diagrams, an architecture report, and an optional semantic knowledge layer.
 
-This guide provides step-by-step instructions on how to run and utilize all features of the Faro project.
+## Setup
 
----
+1. Install Node.js 20 or newer and Docker.
+2. Clone Faro, enter its directory, and install dependencies:
 
-## Prerequisites
-
-Faro leverages **Groq** for high-speed, accurate AI inference using the `openai/gpt-oss-20b` model.
-
-1. Get a free API key at [Groq Console](https://console.groq.com/keys)
-2. Create a `.env` file in the root of the Faro repository and add your key:
-   ```env
-   GROQ_API_KEY=gsk_your_key_here
-   ```
-3. Install dependencies:
    ```bash
    npm install
    ```
-4. Start the Qdrant vector database via Docker:
+
+3. Copy `.env.example` to `.env` and fill in `GOOGLE_API_KEY` and `GROQ_API_KEY`:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   `GOOGLE_API_KEY` enables Gemini embeddings for search and chat. `GROQ_API_KEY` enables chat, agent tasks, and optional `--ai` summaries. Set `QDRANT_URL` only if Qdrant is not at `http://localhost:6333`.
+
+4. Start Qdrant:
+
    ```bash
    docker compose up -d
    ```
 
----
+5. Generate documentation and the knowledge layer:
 
-## Step-by-Step Usage Guide
+   ```bash
+   node src/index.js generate <projectPath>
+   ```
 
-Faro provides a robust CLI with various subcommands. You can run the CLI directly using node:
+   For Faro itself, use `node src/index.js generate ./`.
+
+If `GOOGLE_API_KEY` or Qdrant is unavailable, Markdown, Mermaid graphs, and `ARCHITECTURE.md` still generate. Faro prints a yellow warning and skips the knowledge layer. Semantic search and chat need the knowledge layer; chat also needs `GROQ_API_KEY`. `--ai` summaries need `GROQ_API_KEY` but do not block the static docs when it is missing.
+
+## Commands
+
 ```bash
-node src/index.js <command>
-```
-*(Alternatively, you can link the project via `npm link` to run `Faro <command>` globally).*
-
-### Step 1: Generate the Knowledge Layer
-Before you can chat with the AI or run engineering tasks, you must parse the repository and generate the knowledge store (AST analysis, metrics, vector embeddings, etc.).
-
-**Command:**
-```bash
-node src/index.js generate <path-to-your-project>
-```
-**Example (run against Faro itself):**
-```bash
-node src/index.js generate ./
+node src/index.js generate <projectPath> [--ai]
+node src/index.js reindex <projectPath> [--ai]
+node src/index.js status
+node src/index.js search "dependency graph" [-o outputDir] [-k topK]
+node src/index.js chat "How is the dependency graph built?" [-o outputDir]
+node src/index.js chat [-o outputDir]
+node src/index.js agent <taskType> [targetFile] [-o outputDir]
 ```
 
-**Options:**
-- `--ai`: Opt-in flag to generate AI narrative summaries for your folders and files.
-  ```bash
-  node src/index.js generate ./ --ai
-  ```
+`reindex` removes the project's existing Qdrant collection and rebuilds it. `status` shows the collection name, point count, and vector dimension. Interactive `chat` keeps recent user and assistant turns for the session.
 
-**What this does:**
-This command populates the `output/` directory with:
-- `ARCHITECTURE.md`: A high-level view of your project's metrics and coupling.
-- `dependencies.mermaid`: A visual dependency graph.
-- `vector_store.json`: The semantic embedding knowledge base used for RAG (Retrieval-Augmented Generation).
-- Markdown documentation for every file and folder.
+## Generated artifacts
 
----
+`output/` contains per-file and per-folder Markdown, `ARCHITECTURE.md`, `dependencies.mermaid`, and `classes.mermaid`. When the knowledge layer runs, it also contains `repository_index.json` and `qdrant_meta.json`; vectors and chunk payloads reside in Qdrant under `faro_vectors_<projectname>`.
 
-### Step 2: Semantic Search (Querying the Codebase)
-Once the knowledge layer is built, you can instantly search for concepts, functions, or patterns across your repository using vector embeddings.
+## Stack
 
-**Command:**
-```bash
-node src/index.js search "<your query>"
-```
-**Example:**
-```bash
-node src/index.js search "How are embeddings generated?"
-```
-
-**Options:**
-- `-k, --top <number>`: Number of top search results to return (default is 5).
-- `-o, --output <dir>`: Custom path to the knowledge store output directory (default is `output`).
-
----
-
-### Step 3: Interactive Chat Assistant
-Chat with your repository. The AI contextually understands your codebase by pulling in global architecture data, dependency edges, and semantically matching code chunks.
-
-**Single-Shot Mode (Ask one question and exit):**
-```bash
-node src/index.js chat "Explain the core data flow of this project."
-```
-
-**Interactive REPL Mode (Stay in the chat loop):**
-```bash
-node src/index.js chat
-```
-Once in the REPL, simply type your questions:
-```
-Faro > Where is the metrics calculation implemented?
-Faro > Which files are importing the chatEngine?
-```
-*(Type `exit`, `quit`, or `q` to leave).*
-
----
-
-### Step 4: The Engineering Agent
-The repository Engineering Agent acts as an expert software architect, automating complex engineering tasks based on the contextual state of your repository.
-
-**Command:**
-```bash
-node src/index.js agent <taskType> [targetFile]
-```
-
-**Global Tasks (Repository-wide analysis):**
-- **Architecture Review:** Identify potential bottlenecks and technical debt.
-  ```bash
-  node src/index.js agent review
-  ```
-- **Code Quality Report:** Highlight coupling issues, circular dependencies, and overly complex components.
-  ```bash
-  node src/index.js agent quality
-  ```
-- **Generate README:** Have the AI draft a comprehensive README based on architecture and metrics.
-  ```bash
-  node src/index.js agent readme
-  ```
-
-**File-Specific Tasks (Requires `[targetFile]` parameter):**
-- **Impact Analysis:** Predict what will break if you modify a specific file (analyzes dependency edges).
-  ```bash
-  node src/index.js agent impact src/core/AnalyzerEngine.js
-  ```
-- **Refactoring Suggestions:** Get concrete refactoring advice for a specific file.
-  ```bash
-  node src/index.js agent refactor src/knowledge/searchEngine.js
-  ```
-- **Test Generation:** Generate Jest unit tests targeting edge cases for a specific file.
-  ```bash
-  node src/index.js agent test src/cli/index.js
-  ```
-
----
-
-## Technical Overview
-Faro is fully ES Module compatible and designed using a modular architecture:
-*   **Analyzers** (`src/analyzers`): Pure AST parsers that analyze your code statically.
-*   **Knowledge** (`src/knowledge`): The embedding generation, semantic indexer, and search engine.
-*   **Generators** (`src/generators`): Outputs Mermaid charts, Architecture reports, and standard Markdown.
-*   **Chat & Agent** (`src/chat`, `src/agent`): High-level intelligent systems that consume the parsed `ProjectModel`.
+Faro uses Babel for `.js`, `.jsx`, `.ts`, and `.tsx` analysis, Gemini `gemini-embedding-001` via REST for 768-dimensional embeddings, Qdrant for vector storage, and Groq `openai/gpt-oss-20b` for language generation. Chat uses LangChain LCEL and a custom BaseRetriever for Faro's Qdrant payload.
