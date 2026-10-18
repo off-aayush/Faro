@@ -51,8 +51,7 @@
     "ignore": "^7.0.5",
     "langchain": "^1.5.14",
     "markdown-table": "^3.0.4",
-    "ora": "^9.4.1",
-    "voyageai": "^0.4.0"
+    "ora": "^9.4.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

@@ -20,16 +20,16 @@ export function buildDependencyGraph(projectModel) {
         
         fileModel.imports.forEach(imp => {
             // Very simple resolution for local imports
-            if (imp.type === "local") {
-                // Try to resolve the path relative to the file
+            if (imp.type === "local" || (imp.type === "dynamic" && imp.source.startsWith("."))) {
+                // Prefer the analyzer's resolution, including directory index files.
                 const dir = path.dirname(fileModel.path);
                 
                 // Use standard path.join then normalize
-                let targetPath = path.join(dir, imp.source);
+                let targetPath = imp.resolvedPath || path.join(dir, imp.source);
                 targetPath = normalizeId(targetPath);
                 
                 // If it doesn't end with .js, assume .js for simplicity in this MVP
-                if (!targetPath.endsWith(".js")) {
+                if (!/\.(js|jsx|ts|tsx)$/.test(targetPath)) {
                     targetPath += ".js";
                 }
 
