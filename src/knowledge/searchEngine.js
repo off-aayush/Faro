@@ -1,33 +1,41 @@
 import chalk from "chalk";
-import ora from "ora";
-import { buildRepositoryIndex } from "./indexer.js";
-import { generateEmbedding } from "./embeddingGenerator.js";
+import { generateEmbedding, EmbeddingError } from "./embeddingGenerator.js";
 import { VectorStore } from "./vectorStore.js";
 
 /**
- * Build vector embeddings for all chunks in the ProjectModel and save vector store to outputDir.
+ * Embed chunks, skip individual embedding errors, and save Qdrant metadata.
  *
- * @param {import("../model/ProjectModel.js").ProjectModel} projectModel
+ * @param {Object[]} chunks
  * @param {string} outputDir
+ * @param {string} projectName
  * @returns {Promise<VectorStore>}
  */
-export async function buildAndSaveVectorStore(chunks, outputDir) {
-    const store = new VectorStore();
+export async function buildAndSaveVectorStore(chunks, outputDir, projectName) {
+    const store = new VectorStore(projectName);
     const BATCH_SIZE = 20;
     const DELAY_MS = 1500; // stay well under 100 RPM
+    let skipped = 0;
+    let embedded = 0;
 
     for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
         const batch = chunks.slice(i, i + BATCH_SIZE);
 
         await Promise.all(
             batch.map(async (chunk) => {
-                const vector = await generateEmbedding(chunk.content);
-                await store.add(chunk, vector);
+                try {
+                    const vector = await generateEmbedding(chunk.content);
+                    await store.add(chunk, vector);
+                    embedded++;
+                } catch (error) {
+                    if (!(error instanceof EmbeddingError)) throw error;
+                    skipped++;
+                    console.warn(chalk.yellow(`[SKIP] ${chunk.id} — embedding failed: ${error.message}`));
+                }
             })
         );
 
         const progress = Math.min(i + BATCH_SIZE, chunks.length);
-        process.stdout.write(`\r  Embedding chunks: ${progress}/${chunks.length}`);
+        process.stdout.write(chalk.blue(`\r  Embedding chunks: ${progress}/${chunks.length}`));
 
         // Delay between batches to respect rate limits
         if (i + BATCH_SIZE < chunks.length) {
@@ -35,7 +43,11 @@ export async function buildAndSaveVectorStore(chunks, outputDir) {
         }
     }
 
-    console.log(); // newline after progress
+    console.log(chalk.blue(`\nEmbedded ${embedded}/${chunks.length} chunks (${skipped} skipped due to embedding errors)`));
+    const failureRate = chunks.length ? skipped / chunks.length * 100 : 0;
+    if (failureRate > 20) {
+        throw new Error(`Embedding failure rate too high (${Math.round(failureRate)}%). Check your GOOGLE_API_KEY and rate limits.`);
+    }
     await store.save(outputDir);
     return store;
 }
@@ -54,7 +66,7 @@ export async function searchRepository(query, outputDir = "output", topK = 5) {
 
     if (!loaded) {
         console.error(chalk.red(`\nVector store not found or Qdrant collection missing.`));
-        console.log(chalk.yellow("  Run 'npx faro <projectPath>' first to build the knowledge layer index.\n"));
+        console.log(chalk.yellow("  Run 'node src/index.js generate <projectPath>' with GOOGLE_API_KEY and Qdrant available.\n"));
         return [];
     }
 
@@ -104,6 +116,6 @@ export function displaySearchResults(query, results) {
             console.log(chalk.dim(`    ... (+${contentLines.length - 8} more lines)`));
         }
 
-        console.log();
+        console.log(chalk.dim(""));
     });
 }

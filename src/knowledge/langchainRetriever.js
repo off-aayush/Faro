@@ -16,8 +16,9 @@ class FaroQdrantRetriever extends BaseRetriever {
     constructor(options = {}) {
         super();
         const url = process.env.QDRANT_URL || "http://localhost:6333";
-        this.client = new QdrantClient({ url });
-        this.collectionName = options.collectionName || "faro_vectors";
+        this.client = new QdrantClient({ url, checkCompatibility: false });
+        if (!options.collectionName) throw new Error("A project collection name is required for retrieval.");
+        this.collectionName = options.collectionName;
         this.topK = options.topK ?? 5;
         this.filter = options.filter ?? null;
         this.minScore = options.minScore ?? 0.01;

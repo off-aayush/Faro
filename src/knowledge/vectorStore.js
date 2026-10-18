@@ -2,6 +2,16 @@ import fs from "fs-extra";
 import path from "path";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { VECTOR_DIMENSION } from "./embeddingGenerator.js";
+import chalk from "chalk";
+
+function fnv1a(value) {
+    let hash = 0xcbf29ce484222325n;
+    for (const byte of Buffer.from(value, "utf8")) {
+        hash ^= BigInt(byte);
+        hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+    }
+    return hash;
+}
 
 /**
  * Vector Store for storing and querying code chunk embeddings using Qdrant.
@@ -9,14 +19,11 @@ import { VECTOR_DIMENSION } from "./embeddingGenerator.js";
 export class VectorStore {
     constructor(projectName = null) {
         const url = process.env.QDRANT_URL || "http://localhost:6333";
-        this.client = new QdrantClient({ url });
+        this.client = new QdrantClient({ url, checkCompatibility: false });
         if (projectName) {
-            this.collectionName = `faro_vectors_${projectName.replace(/[^a-zA-Z0-9_-]/g, "_").toLowerCase()}`;
-        } else {
-            this.collectionName = "faro_vectors";
-        }
+            this.collectionName = `faro_vectors_${projectName.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
+        } else this.collectionName = null;
         this.vectorSize = VECTOR_DIMENSION;
-        this.pointIdCounter = 1;
         this._collectionEnsured = false;
     }
 
@@ -45,7 +52,7 @@ export class VectorStore {
                             distance: 'Cosine',
                         },
                     });
-                    console.log(`\nCreated Qdrant collection: ${this.collectionName} (dim: ${VECTOR_DIMENSION})`);
+                    console.log(chalk.green(`\nCreated Qdrant collection: ${this.collectionName} (dim: ${VECTOR_DIMENSION})`));
                 }
 
                 this._collectionEnsured = true;
@@ -63,7 +70,7 @@ export class VectorStore {
      */
     async add(chunk, vector) {
         await this.ensureCollection();
-        const pointId = this.pointIdCounter++;
+        const pointId = Number(fnv1a(chunk.id) % (2n ** 53n));
         await this.client.upsert(this.collectionName, {
             wait: true,
             points: [
@@ -103,7 +110,7 @@ export class VectorStore {
                 chunk: res.payload.chunk
             }));
         } catch (error) {
-            console.error(`Search failed: ${error.message}`);
+            console.error(chalk.red(`Search failed: ${error.message}`));
             return [];
         }
     }
@@ -145,10 +152,14 @@ export class VectorStore {
             return false;
         }
 
-        const data = await fs.readJson(storePath);
-        if (data.collectionName) {
-            this.collectionName = data.collectionName;
+        let data;
+        try {
+            data = await fs.readJson(storePath);
+        } catch {
+            return false;
         }
+        if (!/^faro_vectors_[a-z0-9_]+$/.test(data.collectionName ?? "")) return false;
+        this.collectionName = data.collectionName;
 
         try {
             const result = await this.client.collectionExists(this.collectionName);
