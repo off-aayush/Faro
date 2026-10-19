@@ -29,7 +29,7 @@ The project is structured into distinct, modular pipelines:
    - `DocumentationEngine.js`: The final orchestrator that triggers the generators.
 7. **Generators (`src/generators`)**:
    - `markdownGenerator.js`: Uses `markdown-table` to output structured `.md` files replicating the source directory structure.
-   - `mermaidGenerator.js`: Generates `dependencies.mermaid` (flowchart) and `classes.mermaid` (UML).
+   - `mermaidGenerator.js`: Generates interactive `dependencies.html` (Cytoscape.js + dagre) and `classes.mermaid` (UML).
 
 ## Getting Started Locally
 

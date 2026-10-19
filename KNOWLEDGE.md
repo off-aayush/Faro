@@ -20,7 +20,8 @@ src/
   scanner/scanProject.js          Scans .js, .jsx, .ts, .tsx with standard ignores
   parser/{parser,traverse}.js     Babel parsing and traversal; malformed files skipped
   analyzers/                     Imports, exports, functions, classes, routes, React, metrics
-  generators/                    Markdown, Mermaid, architecture, folders, optional AI summaries
+  generators/mermaidGenerator.js Interactive dependencies.html (Cytoscape.js + dagre) and Mermaid classes.mermaid
+  generators/                    Markdown, architecture, folders, optional AI summaries
   knowledge/chunker.js           Typed semantic chunks
   knowledge/indexer.js           One repository_index.json per generation
   knowledge/embeddingGenerator.js Gemini REST embeddings and EmbeddingError
@@ -32,7 +33,7 @@ src/
   chat/chatEngine.js             Single question and history-aware REPL
   agent/agentEngine.js           Engineering agent tasks
 output/
-  ARCHITECTURE.md, dependencies.mermaid, classes.mermaid
+  ARCHITECTURE.md, dependencies.html, classes.mermaid
   repository_index.json, qdrant_meta.json, per-file and per-folder Markdown
 ```
 
@@ -49,7 +50,8 @@ generate <projectPath>
     -> ProjectModel { projectName, files }
   generateDocs(projectModel, outputDir, options) [always]
     dependency graph -> metrics -> optional Groq AI summaries
-    -> Markdown -> Mermaid -> ARCHITECTURE.md -> folder summaries
+    -> Markdown -> interactive dependency HTML + Mermaid class diagram
+    -> ARCHITECTURE.md -> folder summaries
   generateKnowledge(projectModel, outputDir) [when GOOGLE_API_KEY and Qdrant are available]
     buildRepositoryIndex() once -> repository_index.json
     -> embed chunks via Gemini -> skip EmbeddingError chunks
@@ -113,6 +115,8 @@ Omitting `query` starts the chat REPL. The command names and arguments are uncha
 | CLI | commander, chalk | User-facing output is colored |
 | Scanning and parsing | glob, @babel/parser, @babel/traverse | JSX and TypeScript plugins |
 | Graph | graphlib | Directed import graph |
+| Interactive graph rendering | Cytoscape.js 3.28.1 | Loaded from CDN in generated `dependencies.html`; no npm dependency |
+| Hierarchical graph layout | dagre 0.8.5, cytoscape-dagre 2.5.0 | Loaded from CDN; left-to-right dependency layout |
 | Embeddings | Google Gemini `gemini-embedding-001` via REST (v1beta) | 768-dimensional normalized vectors |
 | Vector database | @qdrant/js-client-rest, Qdrant | `query()` API, project collections, deterministic IDs |
 | LLM | `openai/gpt-oss-20b` via Groq SDK | `GROQ_MODEL` constant in `groqClient.js` |
@@ -126,6 +130,7 @@ Omitting `query` starts the chat REPL. The command names and arguments are uncha
 - Chat history is in memory and is lost when the CLI exits.
 - No automated test suite is configured in `package.json`.
 - The interface is CLI-only.
+- Resolved: the static, unreadable dependency graph was replaced with an interactive Cytoscape.js visualisation with dagre layout, search, focus highlighting, metrics, and dependency navigation.
 - Resolved in stabilization: duplicate index build, chat/RAG circular dependency, zero-vector corruption, unused chat history, inconsistent collection naming, and limited source extensions.
 
 ## 8. Architecture Decisions
@@ -157,3 +162,4 @@ Omitting `query` starts the chat REPL. The command names and arguments are uncha
 | 2026-09-26 | 1 | Gemini embeddings and Qdrant |
 | 2026-09-29 | 2 | LCEL RAG and custom Qdrant retriever |
 | 2026-10-18 | Stabilization | Split docs/knowledge stages; corrected embeddings, IDs, collection lifecycle, chat history, parser/scanner/import/React analysis, and setup guidance. |
+| 2026-10-20 | Dependency visualisation | Replaced the static dependency Mermaid graph with a self-contained interactive Cytoscape.js and dagre HTML artifact; retained Mermaid for class diagrams. |

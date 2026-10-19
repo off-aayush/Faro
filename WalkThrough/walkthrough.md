@@ -16,7 +16,7 @@ This document summarizes the changes made to complete the remaining milestones f
 
 ### 3. Generators
 - **[Markdown Generator](file:///e:/Projects/faro/src/generators/markdownGenerator.js)**: Added a generator that formats lists of functions, classes, routes, and exports into markdown tables for each file.
-- **[Mermaid Generator](file:///e:/Projects/faro/src/generators/mermaidGenerator.js)**: Converts the dependency graph and class data into mermaid diagrams (`dependencies.mermaid` and `classes.mermaid`).
+- **[Dependency Visualization Generator](file:///e:/Projects/faro/src/generators/mermaidGenerator.js)**: Converts dependency data into an interactive Cytoscape.js HTML graph (`dependencies.html`) while retaining the Mermaid UML class diagram (`classes.mermaid`).
 
 ### 4. Integration
 - **[DocumentationEngine.js](file:///e:/Projects/faro/src/core/DocumentationEngine.js)**: Central coordinator linking the Dependency Graph with the Generators, and including an AI Documentation placeholder hook.
@@ -24,7 +24,7 @@ This document summarizes the changes made to complete the remaining milestones f
 
 ## Validation Results
 
-Running `npm run start -- ./src` on the project itself executed without errors and populated the `output/` directory with `.md` files replicating the structure of `src`, alongside two mermaid diagrams (`dependencies.mermaid` and `classes.mermaid`).
+Running `npm run start -- ./src` on the project itself populates the `output/` directory with `.md` files replicating the structure of `src`, alongside the interactive dependency graph (`dependencies.html`) and Mermaid class diagram (`classes.mermaid`).
 
 > [!TIP]
 > You can preview the generated diagrams by rendering the `.mermaid` files in an editor that supports Mermaid.js, or by copy/pasting their content into [Mermaid Live](https://mermaid.live).

@@ -51,7 +51,7 @@ node src/index.js agent <taskType> [targetFile] [-o outputDir]
 
 ## Generated artifacts
 
-`output/` contains per-file and per-folder Markdown, `ARCHITECTURE.md`, `dependencies.mermaid`, and `classes.mermaid`. When the knowledge layer runs, it also contains `repository_index.json` and `qdrant_meta.json`; vectors and chunk payloads reside in Qdrant under `faro_vectors_<projectname>`.
+`output/` contains per-file and per-folder Markdown, `ARCHITECTURE.md`, the interactive `dependencies.html`, and `classes.mermaid`. Open `dependencies.html` directly in a browser to search, navigate, and inspect the dependency graph. When the knowledge layer runs, the directory also contains `repository_index.json` and `qdrant_meta.json`; vectors and chunk payloads reside in Qdrant under `faro_vectors_<projectname>`.
 
 ## Stack
 
