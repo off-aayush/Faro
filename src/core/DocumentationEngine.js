@@ -2,7 +2,7 @@ import "dotenv/config";
 import chalk from "chalk";
 import { buildDependencyGraph } from "./DependencyGraph.js";
 import { generateMarkdown } from "../generators/markdownGenerator.js";
-import { generateMermaid } from "../generators/mermaidGenerator.js";
+import { generateMermaidDiagrams } from "../generators/mermaidGenerator.js";
 import { generateAISummaries } from "../generators/aiGenerator.js";
 import { computeMetrics } from "../analyzers/metricsAnalyzer.js";
 import { generateArchitectureReport } from "../generators/architectureReportGenerator.js";
@@ -34,8 +34,9 @@ export async function generateDocs(projectModel, outputDir, options = {}) {
 
     console.log(chalk.blue("Generating markdown files..."));
     await generateMarkdown(projectModel, outputDir);
-    console.log(chalk.blue("Generating mermaid diagrams..."));
-    await generateMermaid(graph, projectModel, outputDir);
+    console.log(chalk.blue("Generating dependency visualisation and class diagram..."));
+    await generateMermaidDiagrams(projectModel, graph, outputDir);
+    console.log(chalk.dim("  Dependency graph: dependencies.html (interactive — open in browser)"));
     console.log(chalk.blue("Generating architecture report..."));
     await generateArchitectureReport(metrics, projectModel, outputDir);
     console.log(chalk.blue("Generating folder summaries..."));

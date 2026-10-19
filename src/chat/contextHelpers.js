@@ -18,16 +18,36 @@ export async function getArchitectureContext(outputDir) {
     }
 }
 
+async function readDependencyGraphData(outputDir) {
+    const artifact = path.join(outputDir, "dependencies.html");
+    if (!(await fs.pathExists(artifact))) return null;
+    const html = await fs.readFile(artifact, "utf8");
+    const match = html.match(/<script id="faro-graph-data" type="application\/json">([\s\S]*?)<\/script>/);
+    return match ? JSON.parse(match[1]) : null;
+}
+
+/** Read all local dependency edges embedded in the interactive graph. */
+export async function getDependencyGraphContext(outputDir) {
+    try {
+        const graph = await readDependencyGraphData(outputDir);
+        return graph?.edges?.map(edge => `${edge.data.source} --> ${edge.data.target}`).join("\n") ?? "";
+    } catch {
+        return "";
+    }
+}
+
 /** Find dependency edges related to retrieved chunks. */
 export async function getDataFlowContext(searchResults, outputDir) {
     if (!searchResults?.length) return "";
     try {
-        const diagram = path.join(outputDir, "dependencies.mermaid");
-        if (!(await fs.pathExists(diagram))) return "";
-        const paths = [...new Set(searchResults.map(result => result.chunk.filePath.replace(/[^a-zA-Z0-9]/g, "_")))];
-        return (await fs.readFile(diagram, "utf8")).split(/\r?\n/)
-            .filter(line => line.includes("-->") && paths.some(file => line.includes(file)))
-            .map(line => line.trim()).join("\n");
+        const graph = await readDependencyGraphData(outputDir);
+        if (!graph?.edges) return "";
+        const paths = new Set(searchResults.map(result => result.chunk.filePath.replace(/\\/g, "/")));
+        return graph.edges
+            .map(edge => edge.data)
+            .filter(edge => paths.has(edge.source.replace(/\\/g, "/")) || paths.has(edge.target.replace(/\\/g, "/")))
+            .map(edge => `${edge.source} --> ${edge.target}`)
+            .join("\n");
     } catch {
         return "";
     }

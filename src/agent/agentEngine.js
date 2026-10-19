@@ -2,24 +2,13 @@ import chalk from "chalk";
 import fs from "fs-extra";
 import path from "path";
 import { createGroqClient, GROQ_MODEL } from "../core/groqClient.js";
+import { getDependencyGraphContext } from "../chat/contextHelpers.js";
 
 async function getArchitectureContext(outputDir) {
     try {
         const archPath = path.join(process.cwd(), outputDir, "ARCHITECTURE.md");
         if (await fs.pathExists(archPath)) {
             return await fs.readFile(archPath, "utf8");
-        }
-    } catch (err) {
-        // ignore
-    }
-    return "";
-}
-
-async function getDependencyGraphContext(outputDir) {
-    try {
-        const mermaidPath = path.join(process.cwd(), outputDir, "dependencies.mermaid");
-        if (await fs.pathExists(mermaidPath)) {
-            return await fs.readFile(mermaidPath, "utf8");
         }
     } catch (err) {
         // ignore
